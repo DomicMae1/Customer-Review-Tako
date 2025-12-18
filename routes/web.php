@@ -6,7 +6,6 @@ use App\Http\Controllers\CustomersStatusController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PerusahaanController;
 use App\Http\Controllers\RoleController;
-use App\Http\Controllers\SecureFileController;
 use App\Http\Controllers\UserController;
 use App\Models\Customers_Status;
 use Illuminate\Support\Facades\Route;
@@ -52,7 +51,6 @@ Route::post('customer/process-attachment', [CustomerController::class, 'processA
 Route::get('/form/{token}', [CustomerController::class, 'showPublicForm'])->name('customer.form.show');
 Route::post('/form/{token}', [CustomerController::class, 'submitPublicForm'])->name('customer.form.submit');
 Route::post('customer/store-public', [CustomerController::class, 'storePublic'])->name('customer.public.submit');
-Route::get('/secure-attachment/{hash}', [SecureFileController::class, 'show'])->middleware('auth')->name('secure.attachment.show');
 
 Route::get('/file/view/{path}', [FileController::class, 'view'])->middleware('auth')
     ->where('path', '.*') 

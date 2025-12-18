@@ -180,7 +180,7 @@ export function ResettableDropzone({
                 key={componentKey}
                 {...getRootProps()}
                 className={cn(
-                    'flex h-[100px] min-h-[100px] cursor-pointer items-center justify-center rounded-md border-2 border-black p-4 text-center transition-colors md:h-[100px] md:min-h-[200px] dark:border-neutral-800',
+                    'flex h-25 min-h-25 cursor-pointer items-center justify-center rounded-md border-2 border-black p-4 text-center transition-colors md:h-25 md:min-h-50 dark:border-neutral-800',
                     borderColor,
                 )}
             >
