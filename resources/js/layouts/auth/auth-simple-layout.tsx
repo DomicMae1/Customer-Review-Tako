@@ -25,8 +25,8 @@ export default function AuthSimpleLayout({ children, company_name, company_logo,
                                 </div>
                             ) : (
                                 // Fallback: Logo Default Aplikasi
-                                <div className="mb-1 flex h-20 w-20 items-center justify-center rounded-2xl bg-black">
-                                    <AppLogoIcon className="size-14 text-white dark:text-black" />
+                                <div className="mb-1 flex h-30 w-30 items-center justify-center rounded-2xl bg-white md:h-40 md:w-40">
+                                    <AppLogoIcon className="h-full w-full object-contain" />
                                 </div>
                             )}
                         </Link>

@@ -36,21 +36,9 @@ const AppLayout = ({ children, breadcrumbs, ...props }: AppLayoutProps) => {
         };
 
         document.addEventListener('keydown', handleKeyDown);
-        const antiDebug = setInterval(() => {
-            // Function anonim yang memanggil debugger
-            (function() {
-                // Statement 'debugger' akan menghentikan eksekusi browser 
-                // HANYA JIKA Developer Tools sedang terbuka.
-                // Jika user biasa (DevTools tutup), ini tidak berefek apa-apa.
-                debugger; 
-            })();
-        }, 1000); // Cek setiap 1 detik
-
-        // ============================================================
 
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
-            clearInterval(antiDebug); // Bersihkan interval saat unmount
         };
     }, []);
 
