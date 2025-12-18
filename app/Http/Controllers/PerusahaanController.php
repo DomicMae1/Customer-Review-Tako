@@ -27,6 +27,13 @@ class PerusahaanController extends Controller
         }
 
         $perusahaans = Perusahaan::with(['user', 'users','tenant','tenant.domains'])->get();
+        $perusahaans->transform(function ($company) {
+            $company->logo_url = $company->path_company_logo 
+                ? Storage::url($company->path_company_logo) 
+                : null;
+                
+            return $company;
+        });
         $users = User::select('id', 'name')->get();
 
         return Inertia::render('company/page', [

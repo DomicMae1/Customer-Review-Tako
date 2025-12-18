@@ -279,17 +279,21 @@ export default function ManageCompany() {
                             </div>
                             <div>
                                 <ResettableDropzoneImage
-                                    key={form.path_company_logo}
+                                    // Gunakan Key agar komponen mereset diri saat form berubah
+                                    key={selectedCompany ? selectedCompany.id : 'new'}
                                     label="Upload Logo Perusahaan"
                                     isRequired={false}
                                     onFileChange={setCompanyLogoFile}
                                     existingFile={
+                                        // Cek apakah ada URL logo di state form
                                         form.path_company_logo
                                             ? {
+                                                  // Ambil nama file dari URL untuk ditampilkan sebagai label
                                                   nama_file: form.path_company_logo.split('/').pop() ?? 'logo.png',
+                                                  // Path ini SEKARANG sudah berupa URL lengkap dari Controller
                                                   path: form.path_company_logo,
                                               }
-                                            : null
+                                            : undefined // Lebih baik undefined daripada null jika prop optional
                                     }
                                 />
                             </div>
