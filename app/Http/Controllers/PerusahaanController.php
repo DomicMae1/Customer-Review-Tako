@@ -64,7 +64,7 @@ class PerusahaanController extends Controller
             'notify_1' => 'nullable|string',
             'notify_2' => 'nullable|string',
 
-            'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:2048',
+            'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
 
         $logoPath = null;
@@ -176,7 +176,7 @@ class PerusahaanController extends Controller
             'notify_2' => 'nullable|string',
 
             // logo
-            'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:2048',
+            'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
 
         // ========================================
@@ -227,9 +227,6 @@ class PerusahaanController extends Controller
             'domain' => $rawDomain,
         ]);
 
-        // ========================================
-        // 3. Sync user roles
-        // ========================================
         $sync = [];
 
         if (!empty($validated['id_User'])) {
