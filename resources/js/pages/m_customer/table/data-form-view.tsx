@@ -185,6 +185,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                     type: fileType,
                     npwp_number: customer.no_npwp, // Ambil NPWP dari data customer yang sedang di-view
                     customer_id: customer.id,
+                    increment_order: 1,
                 });
 
                 // Simpan path baru yang sudah dipindah ke folder final
@@ -206,39 +207,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
             };
         }
 
-        // =========================================================
-        // TAHAP 2: FINAL SUBMIT (KIRIM PATH FINAL)
-        // =========================================================
-
         const formData = new FormData();
-
-        // if (showExtraFields && attachFile) {
-        //     try {
-        //         const formDataAttach = new FormData();
-        //         formDataAttach.append('file', attachFile);
-
-        //         const resAttach = await axios.post('/customer/upload-temp', formDataAttach, {
-        //             headers: {
-        //                 'Content-Type': 'multipart/form-data',
-        //             },
-        //         });
-
-        //         uploadedAttachments.push({
-        //             id: 0,
-        //             customer_id: customer?.id ?? 0,
-        //             nama_file: resAttach.data.nama_file,
-        //             path: resAttach.data.path,
-        //             type: 'note',
-        //         });
-        //         formData.append('attach_path', resAttach.data.path);
-        //         formData.append('attach_filename', resAttach.data.nama_file);
-        //     } catch (error) {
-        //         console.error('Upload gagal:', error);
-        //         alert('❌ Upload file gagal.');
-        //         setIsLoading(false);
-        //         return;
-        //     }
-        // }
 
         formData.append('customer_id', customer.id.toString());
         formData.append('status_1_by', String(props.auth.user.id));
@@ -581,7 +550,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         <div className="w-full md:w-1/2">
                             <Label className="mb-1 block">Masukkan Keterangan</Label>
                             <textarea
-                                className="h-[200px] w-full rounded-sm border border-gray-500 p-2"
+                                className="h-50 w-full rounded-sm border border-gray-500 p-2"
                                 placeholder="Masukkan keterangan"
                                 value={keterangan}
                                 onChange={(e) => setKeterangan(e.target.value)}
@@ -617,7 +586,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                                     Masukkan Keterangan
                                 </Label>
                                 <textarea
-                                    className="h-[200px] w-full rounded-sm border border-gray-500 p-2"
+                                    className="h-50 w-full rounded-sm border border-gray-500 p-2"
                                     placeholder="Masukkan keterangan"
                                     value={keterangan}
                                     onChange={(e) => setKeterangan(e.target.value)}

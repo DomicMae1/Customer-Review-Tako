@@ -473,7 +473,7 @@ export default function CustomerForm({
 
             try {
                 const processResults = await Promise.all(
-                    rawAttachments.map(async (att) => {
+                    rawAttachments.map(async (att, index) => {
                         // Cek: Apakah path diawali 'temp/'? (Artinya file baru upload)
                         if (att.path.startsWith('temp/')) {
                             // Panggil API process-attachment
@@ -482,12 +482,18 @@ export default function CustomerForm({
                                 nama_file: att.nama_file,
                                 id_perusahaan: auth.user.id_perusahaan,
                                 mode: 'medium', // Mode kompresi default
+
+                                type: att.type,
+                                npwp_number: data.no_npwp,
+                                customer_id: customer?.id,
+                                increment_order: index + 1,
                             });
 
                             // Kembalikan object attachment dengan PATH BARU (Final Path)
                             return {
                                 ...att,
-                                path: processRes.data.final_path, // Path di folder 'slug/attachment/...'
+                                path: processRes.data.final_path,
+                                nama_file: processRes.data.nama_file,
                             };
                         } else {
                             // Jika file lama (tidak di temp), kembalikan apa adanya
@@ -976,7 +982,7 @@ export default function CustomerForm({
                             {/* SPPKP Upload */}
                             <div className="w-full">
                                 <ResettableDropzone
-                                    label="Upload SPPKP"
+                                    label="Upload SPTKP"
                                     uploadConfig={{
                                         url: '/customer/upload-temp',
                                         payload: {

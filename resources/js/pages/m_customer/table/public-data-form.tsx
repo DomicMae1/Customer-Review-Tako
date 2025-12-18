@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { ResettableDropzone } from '@/components/ResettableDropzone';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,11 @@ import { FormEventHandler, useEffect, useState } from 'react';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { NumericFormat } from 'react-number-format';
+
+interface UploadedFileState {
+    path: string;
+    nama_file: string;
+}
 
 export default function PublicCustomerForm({
     customer,
@@ -114,11 +120,30 @@ export default function PublicCustomerForm({
         attachments?: string;
     }>({});
 
-    const [npwpFile, setNpwpFile] = useState<File | null>(null);
-    const [nibFile, setNibFile] = useState<File | null>(null);
-    const [sppkpFile, setSppkpFile] = useState<File | null>(null);
-    const [ktpFile, setKtpFile] = useState<File | null>(null);
+    const [npwpFile, setNpwpFile] = useState<UploadedFileState | null>(null);
+    const [nibFile, setNibFile] = useState<UploadedFileState | null>(null);
+    const [sppkpFile, setSppkpFile] = useState<UploadedFileState | null>(null);
+    const [ktpFile, setKtpFile] = useState<UploadedFileState | null>(null);
     // const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const handleUploadSuccess = (type: string, file: File | null, response: any) => {
+        if (file && response) {
+            const fileData = {
+                path: response.path, // Path temp dari server
+                nama_file: response.nama_file || file.name,
+            };
+            if (type === 'npwp') setNpwpFile(fileData);
+            if (type === 'nib') setNibFile(fileData);
+            if (type === 'sppkp') setSppkpFile(fileData);
+            if (type === 'ktp') setKtpFile(fileData);
+        } else {
+            // Jika dihapus
+            if (type === 'npwp') setNpwpFile(null);
+            if (type === 'nib') setNibFile(null);
+            if (type === 'sppkp') setSppkpFile(null);
+            if (type === 'ktp') setKtpFile(null);
+        }
+    };
 
     useEffect(() => {
         if (isFilled) {
@@ -340,74 +365,101 @@ export default function PublicCustomerForm({
             return;
         }
 
-        const hasExistingNpwp = customer?.attachments?.some((a) => a.type === 'npwp');
-        if (!npwpFile && !hasExistingNpwp) {
-            const message = 'Dokumen NPWP wajib diunggah.';
-            alert(message);
+        const getFileStatus = (newFile: UploadedFileState | null, type: string) => {
+            if (newFile) return true;
+            return customer?.attachments?.some((a) => a.type === type);
+        };
+
+        if (!getFileStatus(npwpFile, 'npwp')) {
+            alert('Dokumen NPWP wajib diunggah.');
+            setIsLoading(false);
             return;
         }
-
-        const hasExistingNib = customer?.attachments?.some((a) => a.type === 'nib');
-        if (!nibFile && !hasExistingNib) {
-            const message = 'Dokumen NIB wajib diunggah.';
-            alert(message);
+        if (!getFileStatus(nibFile, 'nib')) {
+            alert('Dokumen NIB wajib diunggah.');
+            setIsLoading(false);
             return;
         }
-
-        const hasExistingKtp = customer?.attachments?.some((a) => a.type === 'ktp');
-        if (!ktpFile && !hasExistingKtp) {
-            const message = 'Dokumen KTP wajib diunggah.';
-            alert(message);
+        if (!getFileStatus(ktpFile, 'ktp')) {
+            alert('Dokumen KTP wajib diunggah.');
+            setIsLoading(false);
             return;
         }
 
         setErrors(newErrors);
         setIsLoading(true);
 
+        const prepareAttachment = (fileState: UploadedFileState | null, type: string) => {
+            if (fileState) {
+                return { ...fileState, type, is_new: true };
+            }
+            const existing = customer?.attachments?.find((a) => a.type === type);
+            if (existing) {
+                return { path: existing.path, nama_file: existing.nama_file, type, is_new: false };
+            }
+            return null;
+        };
+
+        const rawAttachments = [
+            prepareAttachment(npwpFile, 'npwp'),
+            prepareAttachment(nibFile, 'nib'),
+            prepareAttachment(sppkpFile, 'sppkp'),
+            prepareAttachment(ktpFile, 'ktp'),
+        ].filter(Boolean) as any[];
+
+        const processedAttachments: any[] = [];
+
         try {
-            const uploadedAttachments: Attachment[] = [];
+            const processResults = await Promise.all(
+                rawAttachments.map(async (att, index) => {
+                    if (att.is_new && att.path.startsWith('temp/')) {
+                        const processRes = await axios.post('/customer/process-attachment', {
+                            path: att.path,
+                            nama_file: att.nama_file,
+                            id_perusahaan: id_perusahaan,
+                            mode: 'medium',
+                            customer_id: null,
 
-            if (npwpFile) {
-                const npwp = await uploadAttachment(npwpFile, 'npwp', data.no_npwp);
-                uploadedAttachments.push(npwp);
-            }
+                            type: att.type,
+                            npwp_number: data.no_npwp,
+                            increment_order: index + 1,
+                        });
 
-            if (nibFile) {
-                const nib = await uploadAttachment(nibFile, 'nib', data.no_npwp);
-                uploadedAttachments.push(nib);
-            }
-
-            if (sppkpFile) {
-                const sppkp = await uploadAttachment(sppkpFile, 'sppkp', data.no_npwp);
-                uploadedAttachments.push(sppkp);
-            }
-
-            if (ktpFile) {
-                const ktp = await uploadAttachment(ktpFile, 'ktp', data.no_npwp);
-                uploadedAttachments.push(ktp);
-            }
-
-            const updatedAttachments = [...uploadedAttachments];
-
-            const finalPayload = {
-                ...data,
-                attachments: updatedAttachments,
-            };
-            if (!customer || !customer.id) {
-                try {
-                    const res = await axios.post(route('customer.public.submit'), finalPayload);
-
-                    window.alert(`✅ ${res.data.message}`);
-                    setIsLoading(false);
-                    window.location.reload();
-                } catch (error) {
-                    console.error(error);
-                    setIsLoading(false);
-                }
-            }
+                        return {
+                            nama_file: processRes.data.nama_file,
+                            path: processRes.data.final_path,
+                            type: att.type,
+                        };
+                    } else {
+                        return {
+                            nama_file: att.nama_file,
+                            path: att.path,
+                            type: att.type,
+                        };
+                    }
+                }),
+            );
+            processedAttachments.push(...processResults);
         } catch (err) {
             console.error('Upload gagal:', err);
             alert('Gagal upload file. Silakan coba lagi.');
+            setIsLoading(false);
+        }
+
+        const finalPayload = {
+            ...data,
+            attachments: processedAttachments, // Kirim array attachment yang sudah final
+        };
+
+        try {
+            const res = await axios.post(route('customer.public.submit'), finalPayload);
+            window.alert(`✅ ${res.data.message}`);
+            setIsLoading(false);
+            window.location.reload(); // Atau redirect ke halaman sukses
+        } catch (error: any) {
+            console.error('Submit Error:', error);
+            const msg = error.response?.data?.error || 'Terjadi kesalahan saat menyimpan data.';
+            alert(`❌ ${msg}`);
             setIsLoading(false);
         }
     };
@@ -783,36 +835,79 @@ export default function PublicCustomerForm({
                                 <h1 className="mb-2 text-xl font-semibold">Lampiran</h1>
 
                                 <div className="col-span-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                    {/* NPWP */}
                                     <div className="w-full">
                                         <ResettableDropzone
                                             label="Upload NPWP"
                                             isRequired={true}
-                                            onFileChange={setNpwpFile}
+                                            uploadConfig={{
+                                                url: '/customer/upload-temp', // Endpoint upload raw
+                                                payload: {
+                                                    type: 'npwp',
+                                                    npwp_number: data.no_npwp,
+                                                    id_perusahaan: id_perusahaan,
+                                                    order: '1',
+                                                },
+                                            }}
+                                            onFileChange={(file, response) => handleUploadSuccess('npwp', file, response)}
                                             existingFile={customer?.attachments?.find((a) => a.type === 'npwp')}
                                         />
                                         <p className="mt-1 text-xs text-red-500">* Wajib unggah NPWP dalam format PDF</p>
                                     </div>
+
+                                    {/* NIB */}
                                     <div className="w-full">
                                         <ResettableDropzone
                                             label="Upload NIB"
                                             isRequired={true}
-                                            onFileChange={setNibFile}
+                                            uploadConfig={{
+                                                url: '/customer/upload-temp',
+                                                payload: {
+                                                    type: 'nib',
+                                                    npwp_number: data.no_npwp,
+                                                    id_perusahaan: id_perusahaan,
+                                                    order: '2',
+                                                },
+                                            }}
+                                            onFileChange={(file, response) => handleUploadSuccess('nib', file, response)}
                                             existingFile={customer?.attachments?.find((a) => a.type === 'nib')}
                                         />
                                         <p className="mt-1 text-xs text-red-500">* Wajib unggah NIB dalam format PDF</p>
                                     </div>
+
+                                    {/* SPTKP */}
                                     <div className="w-full">
                                         <ResettableDropzone
-                                            label="Upload SPPKP"
-                                            onFileChange={setSppkpFile}
+                                            label="Upload SPTKP"
+                                            uploadConfig={{
+                                                url: '/customer/upload-temp',
+                                                payload: {
+                                                    type: 'sppkp',
+                                                    npwp_number: data.no_npwp,
+                                                    id_perusahaan: id_perusahaan,
+                                                    order: '3',
+                                                },
+                                            }}
+                                            onFileChange={(file, response) => handleUploadSuccess('sppkp', file, response)}
                                             existingFile={customer?.attachments?.find((a) => a.type === 'sppkp')}
                                         />
                                     </div>
+
+                                    {/* KTP */}
                                     <div className="w-full">
                                         <ResettableDropzone
                                             label="Upload KTP"
                                             isRequired={true}
-                                            onFileChange={setKtpFile}
+                                            uploadConfig={{
+                                                url: '/customer/upload-temp',
+                                                payload: {
+                                                    type: 'ktp',
+                                                    npwp_number: data.no_npwp,
+                                                    id_perusahaan: id_perusahaan,
+                                                    order: '4',
+                                                },
+                                            }}
+                                            onFileChange={(file, response) => handleUploadSuccess('ktp', file, response)}
                                             existingFile={customer?.attachments?.find((a) => a.type === 'ktp')}
                                         />
                                         <p className="mt-1 text-xs text-red-500">* Wajib unggah KTP dalam format PDF</p>

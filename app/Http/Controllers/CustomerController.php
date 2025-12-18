@@ -394,41 +394,6 @@ class CustomerController extends Controller
         }
     }
 
-    private function processAndMoveFiles(array $attachments, string $namaPerusahaan)
-    {
-        $processedAttachments = [];
-        $disk = Storage::disk('customers_external'); // Pastikan config disk ini benar
-
-        foreach ($attachments as $att) {
-            $currentPath = $att['path'];
-            $fileName = $att['nama_file'];
-
-            // Cek apakah path diawali dengan 'temp/' (artinya file baru upload)
-            if (Str::startsWith($currentPath, 'temp/')) {
-                $newPath = $namaPerusahaan . '/customers/' . $fileName;
-
-                // Cek apakah file fisik benar-benar ada di temp
-                if ($disk->exists($currentPath)) {
-                    // Hapus file lama di tujuan jika ada (overwrite conflict)
-                    if ($disk->exists($newPath)) {
-                        $disk->delete($newPath);
-                    }
-
-                    // Pindahkan file
-                    $disk->move($currentPath, $newPath);
-                    
-                    // Update path di array untuk disimpan ke DB
-                    $att['path'] = $newPath;
-                }
-            } 
-            
-            // Masukkan ke array hasil (baik yang dipindah maupun yang sudah lama)
-            $processedAttachments[] = $att;
-        }
-
-        return $processedAttachments;
-    }
-
     // public function upload(Request $request)
     // {
     //     $file = $request->file('file');
@@ -496,7 +461,7 @@ class CustomerController extends Controller
             'role' => 'nullable|string',
             'type' => 'nullable|string',
             'npwp_number' => 'nullable|string',
-            'customer_id' => 'required|integer', // TAMBAHAN: Butuh ID Customer untuk cek urutan file terakhir
+            'customer_id' => 'nullable|integer', // TAMBAHAN: Butuh ID Customer untuk cek urutan file terakhir
         ]);
 
         $tempPath = $request->path;
@@ -505,6 +470,9 @@ class CustomerController extends Controller
         $idPerusahaan = $request->id_perusahaan;
         $role = strtolower($request->role ?? 'user');
         $customerId = $request->customer_id;
+        $incrementOrder = (int)($request->increment_order ?? 1);
+
+        $nextOrder = 1;
 
         // 1. Setup Disk & Slug
         $disk = Storage::disk('customers_external');
@@ -525,28 +493,47 @@ class CustomerController extends Controller
         // A. HITUNG NOMOR URUT (AUTO INCREMENT ORDER)
         // =========================================================
         
-        // 1. Cek Max Order dari tabel Attachments
-        $lastFromAttach = CustomerAttach::where('customer_id', $customerId)
-            ->get()
-            ->map(fn($r) => intval(explode('-', $r->nama_file)[1] ?? 0))
-            ->max() ?? 0;
-
-        // 2. Cek Max Order dari tabel Status (file approval)
-        $status = Customers_Status::where('id_Customer', $customerId)->first();
-        $statusFields = [
-            'submit_1_nama_file', 'status_1_nama_file', 
-            'status_2_nama_file', 'submit_3_nama_file', 'status_4_nama_file'
-        ];
-
-        $lastFromStatus = 0;
-        if ($status) {
-            $lastFromStatus = collect($statusFields)
-                ->map(fn($f) => intval(explode('-', $status->$f ?? '')[1] ?? 0))
+        if ($customerId) {
+            $lastFromAttach = CustomerAttach::where('customer_id', $customerId)
+                ->get()
+                ->map(fn($r) => intval(explode('-', $r->nama_file)[1] ?? 0))
                 ->max() ?? 0;
-        }
 
-        // 3. Ambil nilai terbesar + 1
-        $nextOrder = max($lastFromAttach, $lastFromStatus) + 1;
+            // ... (logika cek status file sama) ...
+            $status = \App\Models\Customers_Status::where('id_Customer', $customerId)->first();
+            $statusFields = [
+                'submit_1_nama_file', 
+                'status_1_nama_file', 
+                'status_2_nama_file', 
+                'submit_3_nama_file', 
+                'status_4_nama_file'
+            ];
+            $lastFromStatus = 0;
+            if ($status) {    
+                $lastFromStatus = collect($statusFields)
+                    ->map(function ($field) use ($status) {
+                        $filename = $status->$field; 
+                        if (!$filename) return 0;
+                        
+                        $parts = explode('-', $filename);
+                        if (preg_match('/\-(\d{3})\-/', $filename, $matches)) {
+                            return intval($matches[1]);
+                        }
+                        
+                        // Fallback ke logic explode jika simple
+                        return intval($parts[1] ?? 0); 
+                    })
+                    ->max() ?? 0;
+            }
+
+            $maxDbOrder = max($lastFromAttach, $lastFromStatus);
+            
+            // Urutan = Max di DB + Urutan batch ini
+            $nextOrder = $maxDbOrder + $incrementOrder;
+
+        } else {
+            $nextOrder = $incrementOrder; 
+        }
         $orderString = str_pad($nextOrder, 3, '0', STR_PAD_LEFT);
 
         // =========================================================
