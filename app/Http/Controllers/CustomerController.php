@@ -830,7 +830,6 @@ class CustomerController extends Controller
         $customer = Customer::with(['attachments', 'perusahaan'])->findOrFail($id);
         $user = auth('web')->user();
 
-        // 1. Setup Folder Temp
         $tempDir = storage_path("app/temp");
         if (!file_exists($tempDir)) {
             mkdir($tempDir, 0755, true);
@@ -847,82 +846,85 @@ class CustomerController extends Controller
         // 3. Proses Attachment
         $attachmentPdfPaths = [];
 
-        // Definisikan Root Folder Eksternal Anda
-        $externalBasePath = '/mnt/Customer_Registration';
+        $externalRoot = '/mnt/Customer_Registration'; 
 
-        foreach ($customer->attachments as $attachment) {
-            // Hanya ambil tipe dokumen tertentu
-            if (!in_array($attachment->type, ['npwp', 'nib', 'ktp'])) continue;
+        if ($customer->attachments && count($customer->attachments) > 0) {
+            foreach ($customer->attachments as $attachment) {
+                
+                // Filter: Hanya ambil dokumen penting (NPWP, NIB, KTP, dll)
+                if (!in_array($attachment->type, ['npwp', 'nib', 'ktp'])) continue;
 
-            // --- BAGIAN PERBAIKAN PATH ---
-            
-            // Bersihkan path dari database. 
-            // parse_url digunakan jaga-jaga jika path di DB tersimpan sebagai URL lengkap.
-            $rawPath = parse_url($attachment->path, PHP_URL_PATH);
+                // --- LOGIC PENGGABUNGAN PATH ---
+                
+                // 1. Ambil path dari DB: "pt-alpha/attachment/313...-003-ktp.pdf"
+                $dbPath = $attachment->path; 
 
-            // Hapus prefix '/storage/' atau slash di depan jika ada, agar jadi relative path bersih
-            // Contoh: "/storage/PT-A/file.pdf" menjadi "PT-A/file.pdf"
-            $relativePath = ltrim(str_replace(['/storage/', 'storage/'], '', $rawPath), '/');
+                // 2. Bersihkan path (Jaga-jaga jika di DB tersimpan "storage/pt-alpha/...")
+                // Kita hapus kata 'storage/' atau '/storage/' agar mendapatkan relative path yang murni
+                $cleanRelativePath = ltrim(str_replace(['/storage/', 'storage/'], '', $dbPath), '/');
 
-            // Gabungkan dengan base path eksternal
-            // Hasil akhir: "/mnt/Customer_Registration/NamaPT/folder/file.pdf"
-            $localPath = "{$externalBasePath}/{$relativePath}";
+                // 3. Gabungkan Root Eksternal + Relative Path
+                // Hasil: "/mnt/Customer_Registration/pt-alpha/attachment/313...-003-ktp.pdf"
+                $fullFilePath = "{$externalRoot}/{$cleanRelativePath}";
 
-            // Cek apakah file benar-benar ada di folder mount
-            if (!file_exists($localPath)) {
-                Log::warning("⚠️ File attachment tidak ditemukan di: {$localPath}");
-                continue;
-            }
+                // 4. Validasi Keberadaan File di Linux
+                if (!file_exists($fullFilePath)) {
+                    Log::warning("⚠️ File fisik tidak ditemukan di: {$fullFilePath}");
+                    continue; // Skip jika file tidak ada
+                }
 
-            // --- PROSES FILE (SAMA SEPERTI SEBELUMNYA) ---
+                // --- PROSES KONVERSI (PDF/GAMBAR) ---
 
-            if (Str::endsWith(strtolower($localPath), '.pdf')) {
-                $attachmentPdfPaths[] = $localPath;
-            } else {
-                // Jika gambar, convert ke PDF dulu
-                try {
-                    $convertedPdfPath = "{$tempDir}/converted_" . $attachment->type . "_{$customer->id}_{$attachment->id}.pdf";
-                    
-                    // Render view wrapper gambar
-                    $html = view('pdf.attachment-wrapper', [
-                        'title' => strtoupper($attachment->type),
-                        'filePath' => $localPath, // Dompdf bisa baca absolute path jika permission allowed
-                        'extension' => pathinfo($localPath, PATHINFO_EXTENSION),
-                    ])->render();
+                if (Str::endsWith(strtolower($fullFilePath), '.pdf')) {
+                    // Jika sudah PDF, langsung masukkan antrian merge
+                    $attachmentPdfPaths[] = $fullFilePath;
+                } else {
+                    // Jika Gambar (JPG/PNG), Convert ke PDF dulu menggunakan View Wrapper
+                    try {
+                        $convertedPdfPath = "{$tempDir}/converted_{$attachment->type}_{$attachment->id}.pdf";
+                        
+                        $html = view('pdf.attachment-wrapper', [
+                            'title' => strtoupper($attachment->type),
+                            'filePath' => $fullFilePath, // DomPDF support absolute path linux
+                            'extension' => pathinfo($fullFilePath, PATHINFO_EXTENSION),
+                        ])->render();
 
-                    $converted = Pdf::loadHTML($html)->setPaper('a4');
-                    file_put_contents($convertedPdfPath, $converted->output());
+                        $converted = Pdf::loadHTML($html)->setPaper('a4');
+                        file_put_contents($convertedPdfPath, $converted->output());
 
-                    $attachmentPdfPaths[] = $convertedPdfPath;
-                } catch (\Exception $e) {
-                    Log::error("Gagal convert gambar ke PDF: " . $e->getMessage());
+                        $attachmentPdfPaths[] = $convertedPdfPath;
+                    } catch (\Exception $e) {
+                        Log::error("Gagal convert gambar attachment ID {$attachment->id}: " . $e->getMessage());
+                    }
                 }
             }
         }
 
-        // 4. Merge PDF
-        $mergedPath = "{$tempDir}/customer_{$customer->id}.pdf";
-        
+        // 4. Merge PDF (Main + Attachments)
+        $mergedPath = "{$tempDir}/customer_{$customer->id}_full.pdf";
+        $finalPath = $mainPdfPath; // Default fallback (hanya cover jika merge gagal)
+
         try {
-            // Gabungkan Main PDF dengan Attachment yang ditemukan
-            $filesToMerge = array_merge([$mainPdfPath], $attachmentPdfPaths);
-            
-            // Panggil fungsi ghostscript Anda (pastikan fungsi ini support absolute path)
-            $this->mergePdfsWithGhostscript($filesToMerge, $mergedPath);
+            if (count($attachmentPdfPaths) > 0) {
+                // Gabungkan Main PDF dengan semua Attachment
+                $filesToMerge = array_merge([$mainPdfPath], $attachmentPdfPaths);
+                
+                // Panggil fungsi Ghostscript Helper
+                $this->mergePdfsWithGhostscript($filesToMerge, $mergedPath);
 
-            if (!file_exists($mergedPath) || filesize($mergedPath) < 1000) {
-                throw new \Exception('Hasil merge kosong atau corrupt.');
+                if (file_exists($mergedPath) && filesize($mergedPath) > 1000) {
+                    $finalPath = $mergedPath;
+                } else {
+                    throw new \Exception('File hasil merge corrupt atau kosong.');
+                }
             }
-
-            $finalPath = $mergedPath;
         } catch (\Throwable $e) {
-            Log::error("⚠️ Merge gagal, fallback ke main PDF. Error: " . $e->getMessage());
-            $finalPath = $mainPdfPath; // Jika gagal, kirim PDF utama saja
+            Log::error("⚠️ Merge gagal (Ghostscript Error), mengirim PDF utama saja. Error: " . $e->getMessage());
         }
 
-        Log::info("✅ Proses selesai, download file.");
+        Log::info("✅ Generate PDF Selesai. File: {$finalPath}");
 
-        return response()->download($finalPath, "customer_{$customer->id}.pdf", [
+        return response()->download($finalPath, "Review_Customer_{$customer->id}.pdf", [
             'Content-Type' => 'application/pdf',
         ])->deleteFileAfterSend(true);
     }

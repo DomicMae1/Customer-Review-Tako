@@ -7,6 +7,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PerusahaanController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\SecureFileController;
 use App\Models\Customers_Status;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -60,6 +61,9 @@ Route::get('/customer/{path}', [FileController::class, 'view'])
     ->where('path', '.*') 
     ->name('file.view');
 
+Route::get('/secure-attachment/{path}', [SecureFileController::class, 'show'])
+        ->where('path', '.*')
+        ->name('secure.attachment.show');
 
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';

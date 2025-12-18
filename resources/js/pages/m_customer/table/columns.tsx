@@ -6,14 +6,43 @@ import { MasterCustomer } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal } from 'lucide-react';
+import axios from 'axios';
 
-const downloadPdf = (id: number) => {
-    const link = document.createElement('a');
-    link.href = `/customer/${id}/pdf`;
-    link.setAttribute('download', `customer_${id}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+const downloadPdf = async (id: number) => {
+    try {
+        // Beri feedback ke user bahwa proses sedang berjalan
+        const confirmDownload = window.confirm("Sedang memproses PDF (ini mungkin memakan waktu beberapa detik). Lanjutkan?");
+        if (!confirmDownload) return;
+
+        const response = await axios.get(`/customer/${id}/pdf`, {
+            responseType: 'blob', // PENTING: Agar respon dibaca sebagai file
+        });
+
+        // Buat URL sementara untuk blob
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Ambil nama file dari header (jika tersedia)
+        const contentDisposition = response.headers['content-disposition'];
+        let fileName = `Review_Customer_${id}.pdf`;
+        if (contentDisposition) {
+            const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/);
+            if (fileNameMatch && fileNameMatch.length === 2) fileName = fileNameMatch[1];
+        }
+
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        
+        // Cleanup memori
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+        console.error("Download Error:", error);
+        alert("Gagal mengunduh PDF. Silakan coba lagi nanti.");
+    }
 };
 
 export const columns = (): ColumnDef<MasterCustomer>[] => {
