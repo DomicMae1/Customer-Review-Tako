@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Perusahaan;
 use App\Models\Tenant;
+use Illuminate\Validation\Rule;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -160,10 +161,21 @@ class PerusahaanController extends Controller
 
     public function update(Request $request, Perusahaan $perusahaan)
     {
+
+        $currentTenant = Tenant::where('perusahaan_id', $perusahaan->id)->first();
+    
+        $currentDomainId = $currentTenant ? $currentTenant->domains()->value('id') : null;
+
         $validated = $request->validate([
             'nama_perusahaan' => 'required|string|max:255',
 
-            'domain'          => 'required|string|max:255|unique:domains,domain',
+            'domain' => [
+                'required',
+                'string',
+                'max:255',
+                // Cek unique di tabel domains kolom domain, TAPI abaikan ID milik perusahaan ini
+                Rule::unique('domains', 'domain')->ignore($currentDomainId),
+            ],
 
             // user roles
             'id_User'   => 'nullable|integer|exists:users,id',
@@ -179,22 +191,14 @@ class PerusahaanController extends Controller
             'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
 
-        // ========================================
-        // 1. Update logo
-        // ========================================
         if ($request->hasFile('company_logo')) {
-            // Hapus logo lama
             if ($perusahaan->path_company_logo && Storage::disk('public')->exists($perusahaan->path_company_logo)) {
                 Storage::disk('public')->delete($perusahaan->path_company_logo);
             }
 
-            // Upload baru
             $perusahaan->path_company_logo = $request->file('company_logo')->store('company_logo', 'public');
         }
 
-        // ========================================
-        // 2. Update perusahaan
-        // ========================================
         $perusahaan->update([
             'nama_perusahaan'   => $validated['nama_perusahaan'],
             'notify_1'          => $validated['notify_1'] ?? null,
@@ -208,21 +212,17 @@ class PerusahaanController extends Controller
 
         $rawTenant= Str::slug($tenantId);
 
-        // Cari tenant berdasarkan perusahaan_id
         $tenant = Tenant::where('perusahaan_id', $perusahaan->id)->first();
 
         if (!$tenant) {
-            // Jika tenant belum ada (kasus langka)
             $tenant = Tenant::create([
                 'id' => Str::slug($rawTenant),
                 'perusahaan_id' => $perusahaan->id,
             ]);
         }
 
-        // Hapus semua domain lama
         $tenant->domains()->delete();
 
-        // Buat domain baru
         $tenant->domains()->create([
             'domain' => $rawDomain,
         ]);
