@@ -191,43 +191,43 @@ export default function CustomerForm({
         );
     }, [customer]);
 
-    let counter = 1;
+    // let counter = 1;
 
-    async function uploadAttachment(file: File, type: AttachmentType, npwpNumber: string): Promise<Attachment> {
-        const formData = new FormData();
-        const id_perusahaan = auth.user.id_perusahaan;
-        formData.append('file', file);
-        formData.append('order', String(counter));
-        formData.append('npwp_number', npwpNumber);
-        formData.append('type', type);
-        formData.append('id_perusahaan', String(id_perusahaan));
+    // async function uploadAttachment(file: File, type: AttachmentType, npwpNumber: string): Promise<Attachment> {
+    //     const formData = new FormData();
+    //     const id_perusahaan = auth.user.id_perusahaan;
+    //     formData.append('file', file);
+    //     formData.append('order', String(counter));
+    //     formData.append('npwp_number', npwpNumber);
+    //     formData.append('type', type);
+    //     formData.append('id_perusahaan', String(id_perusahaan));
 
-        const res = await axios.post('/customer/upload-temp', formData);
+    //     const res = await axios.post('/customer/upload-temp', formData);
 
-        counter++;
+    //     counter++;
 
-        return {
-            id: 0,
-            customer_id: customer?.id ?? 0,
-            nama_file: res.data.nama_file,
-            path: res.data.path,
-            type,
-        };
-    }
+    //     return {
+    //         id: 0,
+    //         customer_id: customer?.id ?? 0,
+    //         nama_file: res.data.nama_file,
+    //         path: res.data.path,
+    //         type,
+    //     };
+    // }
 
-    const extractAttachmentFromStatus = (statuses: any[], type: AttachmentType): Attachment | null => {
-        if (statuses.length > 0) {
-            const file = statuses[0];
-            return {
-                id: 0,
-                customer_id: customer?.id ?? 0,
-                nama_file: file.fileName,
-                path: file.result,
-                type,
-            };
-        }
-        return null;
-    };
+    // const extractAttachmentFromStatus = (statuses: any[], type: AttachmentType): Attachment | null => {
+    //     if (statuses.length > 0) {
+    //         const file = statuses[0];
+    //         return {
+    //             id: 0,
+    //             customer_id: customer?.id ?? 0,
+    //             nama_file: file.fileName,
+    //             path: file.result,
+    //             type,
+    //         };
+    //     }
+    //     return null;
+    // };
 
     const handleSubmit: FormEventHandler = async (e) => {
         e.preventDefault();

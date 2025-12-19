@@ -394,22 +394,6 @@ class CustomerController extends Controller
         }
     }
 
-    // public function upload(Request $request)
-    // {
-    //     $file = $request->file('file');
-
-    //     $filename = time() . '_' . $file->getClientOriginalName();
-
-    //     $path = $file->storeAs('customers', $filename, 'public');
-
-    //     $url = url(Storage::url($path)); 
-
-    //     return response()->json([
-    //         'path' => $url,           
-    //         'nama_file' => $filename,
-    //     ]);
-    // }
-
     public function upload(Request $request)
     {
         // Validasi File
@@ -422,11 +406,12 @@ class CustomerController extends Controller
         $order       = str_pad((int)$request->input('order'), 3, '0', STR_PAD_LEFT);
         $npwp        = preg_replace('/[^0-9]/', '', $request->input('npwp_number'));
         $type        = strtolower($request->input('type'));
-        
+
         // Simpan mode kompresi di nama file atau return ke frontend agar bisa dikirim balik saat store
         // Di sini kita hanya butuh nama file temp yang unik
         $ext         = $file->getClientOriginalExtension();
-        $filename    = "{$npwp}-{$order}-{$type}.{$ext}";
+        $uniqueId = uniqid();
+        $filename    = "{$npwp}-{$order}-{$type}-{$uniqueId}.{$ext}";
 
         $disk        = Storage::disk('customers_external');
         $tempDir     = 'temp';
@@ -438,7 +423,7 @@ class CustomerController extends Controller
 
         // Simpan File RAW langsung ke Temp (Tanpa Kompresi)
         $tempRel = "{$tempDir}/{$filename}";
-        
+
         // Gunakan stream untuk efisiensi memori saat save
         $disk->put($tempRel, file_get_contents($file->getRealPath()));
 
@@ -476,7 +461,7 @@ class CustomerController extends Controller
 
         // 1. Setup Disk & Slug
         $disk = Storage::disk('customers_external');
-        
+
         $companySlug = 'general';
         if ($idPerusahaan) {
             $perusahaan = Perusahaan::find($idPerusahaan);
@@ -489,10 +474,6 @@ class CustomerController extends Controller
             return response()->json(['error' => 'File temp tidak ditemukan'], 404);
         }
 
-        // =========================================================
-        // A. HITUNG NOMOR URUT (AUTO INCREMENT ORDER)
-        // =========================================================
-        
         if ($customerId) {
             $lastFromAttach = CustomerAttach::where('customer_id', $customerId)
                 ->get()
@@ -502,53 +483,46 @@ class CustomerController extends Controller
             // ... (logika cek status file sama) ...
             $status = \App\Models\Customers_Status::where('id_Customer', $customerId)->first();
             $statusFields = [
-                'submit_1_nama_file', 
-                'status_1_nama_file', 
-                'status_2_nama_file', 
-                'submit_3_nama_file', 
+                'submit_1_nama_file',
+                'status_1_nama_file',
+                'status_2_nama_file',
+                'submit_3_nama_file',
                 'status_4_nama_file'
             ];
             $lastFromStatus = 0;
-            if ($status) {    
+            if ($status) {
                 $lastFromStatus = collect($statusFields)
                     ->map(function ($field) use ($status) {
-                        $filename = $status->$field; 
+                        $filename = $status->$field;
                         if (!$filename) return 0;
-                        
+
                         $parts = explode('-', $filename);
                         if (preg_match('/\-(\d{3})\-/', $filename, $matches)) {
                             return intval($matches[1]);
                         }
-                        
+
                         // Fallback ke logic explode jika simple
-                        return intval($parts[1] ?? 0); 
+                        return intval($parts[1] ?? 0);
                     })
                     ->max() ?? 0;
             }
 
             $maxDbOrder = max($lastFromAttach, $lastFromStatus);
-            
-            // Urutan = Max di DB + Urutan batch ini
-            $nextOrder = $maxDbOrder + $incrementOrder;
 
+            $nextOrder = $maxDbOrder + $incrementOrder;
         } else {
-            $nextOrder = $incrementOrder; 
+            $nextOrder = $incrementOrder;
         }
         $orderString = str_pad($nextOrder, 3, '0', STR_PAD_LEFT);
 
-        // =========================================================
-        // B. GENERATE NAMA FILE BARU
-        // =========================================================
-        
         $npwp = preg_replace('/[^0-9]/', '', $request->npwp_number) ?: '0000000000000000';
-        
+
         $docType = $request->type ? strtolower($request->type) : 'document';
-        
-        // Mapping tipe dokumen
+
         if ($docType === 'lampiran_marketing') $docType = 'marketing_review';
         if ($docType === 'lampiran_auditor') $docType = 'audit_review';
         if ($docType === 'lampiran_review_general') {
-             $docType = match ($role) {
+            $docType = match ($role) {
                 'manager'  => 'manager_review',
                 'direktur' => 'director_review',
                 'lawyer'   => 'lawyer_review',
@@ -558,13 +532,8 @@ class CustomerController extends Controller
         }
 
         $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        // Gunakan $orderString hasil perhitungan di atas
         $newFileName = "{$npwp}-{$orderString}-{$docType}.{$ext}";
 
-        // =========================================================
-        // C. TENTUKAN FOLDER TUJUAN
-        // =========================================================
-        
         $subFolder = ($role === 'user') ? 'attachment' : 'customers';
         if (in_array($docType, ['npwp', 'nib', 'sppkp', 'ktp'])) {
             $subFolder = 'attachment';
@@ -574,21 +543,17 @@ class CustomerController extends Controller
         if (!$disk->exists($targetDir)) {
             $disk->makeDirectory($targetDir);
         }
-        
-        $finalRelPath = "{$targetDir}/{$newFileName}";
 
-        // =========================================================
-        // D. PROSES KOMPRESI & PINDAH (LOGIC TETAP SAMA)
-        // =========================================================
+        $finalRelPath = "{$targetDir}/{$newFileName}";
 
         $success = false;
 
         if ($ext === 'pdf') {
             $localInputName = 'gs_in_' . uniqid() . '.pdf';
             $localOutputName = 'gs_out_' . uniqid() . '.pdf';
-            
+
             Storage::disk('local')->put("gs_processing/{$localInputName}", $disk->get($tempPath));
-            
+
             $localInputPath = Storage::disk('local')->path("gs_processing/{$localInputName}");
             $localOutputPath = Storage::disk('local')->path("gs_processing/{$localOutputName}");
 
@@ -619,7 +584,6 @@ class CustomerController extends Controller
         ]);
     }
 
-    // Helper Ghostscript (Private)
     private function runGhostscript($inputPath, $outputPath, $mode)
     {
         $settings = [
@@ -629,32 +593,30 @@ class CustomerController extends Controller
         ];
         $config = $settings[$mode] ?? $settings['medium'];
 
-        // Deteksi OS untuk Path Ghostscript
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
         $gsExe = $isWindows ? 'C:\Program Files\gs\gs10.05.1\bin\gswin64c.exe' : '/usr/bin/gs';
 
-        // Pastikan input path kompatibel dengan OS (terutama Windows backslashes)
         if ($isWindows) {
             $inputPath = str_replace('/', '\\', $inputPath);
             $outputPath = str_replace('/', '\\', $outputPath);
         }
 
         $cmd = array_merge([
-            $gsExe, 
-            '-q', 
-            '-dSAFER', 
-            '-sDEVICE=pdfwrite', 
-            '-dCompatibilityLevel=1.4', 
-            '-o', $outputPath, 
+            $gsExe,
+            '-q',
+            '-dSAFER',
+            '-sDEVICE=pdfwrite',
+            '-dCompatibilityLevel=1.4',
+            '-o',
+            $outputPath,
             $inputPath
         ], $config);
 
         try {
             $process = new Process($cmd);
-            $process->setTimeout(300); 
+            $process->setTimeout(300);
             $process->run();
 
-            // Log Error Output jika gagal (Sangat membantu debugging)
             if (!$process->isSuccessful()) {
                 Log::error('Ghostscript Error Output: ' . $process->getErrorOutput());
                 return false;
@@ -777,20 +739,20 @@ class CustomerController extends Controller
             $roles = $user->getRoleNames();
 
             if (isset($validated['attachments'])) {
-            CustomerAttach::where('customer_id', $customer->id)->delete();
+                CustomerAttach::where('customer_id', $customer->id)->delete();
 
-            foreach ($validated['attachments'] as $attachment) {
-                // Pastikan path bukan blob local (hanya defensive check)
-                if (!str_starts_with($attachment['path'], 'blob:')) {
-                    CustomerAttach::create([
-                        'customer_id' => $customer->id,
-                        'nama_file'   => $attachment['nama_file'],
-                        'path'        => $attachment['path'], // Path ini SUDAH FINAL dari proses frontend
-                        'type'        => $attachment['type'],
-                    ]);
+                foreach ($validated['attachments'] as $attachment) {
+                    // Pastikan path bukan blob local (hanya defensive check)
+                    if (!str_starts_with($attachment['path'], 'blob:')) {
+                        CustomerAttach::create([
+                            'customer_id' => $customer->id,
+                            'nama_file'   => $attachment['nama_file'],
+                            'path'        => $attachment['path'], // Path ini SUDAH FINAL dari proses frontend
+                            'type'        => $attachment['type'],
+                        ]);
+                    }
                 }
             }
-        }
 
             DB::commit();
             return redirect()->route('customer.index')->with('success', 'Data Customer berhasil diperbarui!');
@@ -846,18 +808,18 @@ class CustomerController extends Controller
         // 3. Proses Attachment
         $attachmentPdfPaths = [];
 
-        $externalRoot = '/mnt/Customer_Registration'; 
+        $externalRoot = '/mnt/Customer_Registration';
 
         if ($customer->attachments && count($customer->attachments) > 0) {
             foreach ($customer->attachments as $attachment) {
-                
+
                 // Filter: Hanya ambil dokumen penting (NPWP, NIB, KTP, dll)
                 if (!in_array($attachment->type, ['npwp', 'nib', 'ktp'])) continue;
 
                 // --- LOGIC PENGGABUNGAN PATH ---
-                
+
                 // 1. Ambil path dari DB: "pt-alpha/attachment/313...-003-ktp.pdf"
-                $dbPath = $attachment->path; 
+                $dbPath = $attachment->path;
 
                 // 2. Bersihkan path (Jaga-jaga jika di DB tersimpan "storage/pt-alpha/...")
                 // Kita hapus kata 'storage/' atau '/storage/' agar mendapatkan relative path yang murni
@@ -882,7 +844,7 @@ class CustomerController extends Controller
                     // Jika Gambar (JPG/PNG), Convert ke PDF dulu menggunakan View Wrapper
                     try {
                         $convertedPdfPath = "{$tempDir}/converted_{$attachment->type}_{$attachment->id}.pdf";
-                        
+
                         $html = view('pdf.attachment-wrapper', [
                             'title' => strtoupper($attachment->type),
                             'filePath' => $fullFilePath, // DomPDF support absolute path linux
@@ -908,7 +870,7 @@ class CustomerController extends Controller
             if (count($attachmentPdfPaths) > 0) {
                 // Gabungkan Main PDF dengan semua Attachment
                 $filesToMerge = array_merge([$mainPdfPath], $attachmentPdfPaths);
-                
+
                 // Panggil fungsi Ghostscript Helper
                 $this->mergePdfsWithGhostscript($filesToMerge, $mergedPath);
 
@@ -1007,8 +969,8 @@ class CustomerController extends Controller
         ]);
 
         $customer = Customer::create(array_merge($validated, [
-            'id_user' => $link->id_user, 
-            'id_perusahaan' => $link->id_perusahaan, 
+            'id_user' => $link->id_user,
+            'id_perusahaan' => $link->id_perusahaan,
         ]));
 
         return redirect('/')->with('success', 'Data berhasil dikirim.');
@@ -1049,7 +1011,6 @@ class CustomerController extends Controller
                 'auditor_note' => false,
                 'auditor_note_text' => null,
             ]);
-
         }
 
         // 4. Cek lawyer reject (status_3)
@@ -1068,5 +1029,4 @@ class CustomerController extends Controller
             'auditor_note_text' => $auditorHasNote ? $status->status_4_keterangan : null,
         ]);
     }
-
 }
