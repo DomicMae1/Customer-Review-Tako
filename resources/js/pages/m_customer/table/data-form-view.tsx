@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Attachment, MasterCustomer } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
+import Swal from 'sweetalert2';
 import axios from 'axios';
 import { File, Loader2, SquareCheck, SquareX } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -129,7 +130,101 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
             return;
         }
         setIsLoading(true);
-        const uploadedAttachments = [];
+
+        if (isCreator) {
+            try {
+                const res = await axios.post(route('customer.check-npwp'), {
+                    no_npwp: customer.no_npwp, // Gunakan data dari prop customer
+                    no_npwp_16: customer.no_npwp_16,
+                });
+
+                console.log("RESPONSE BACKEND:", res.data);
+
+                const { 
+                    exists, 
+                    nama_perusahaan, 
+                    lawyer_rejected, 
+                    note, 
+                    lawyer_file, 
+                    auditor_note, 
+                    auditor_note_text, 
+                    auditor_file 
+                } = res.data;
+
+                if (exists) {
+                    // A. Mulai Susun HTML (Wrapper)
+                    let htmlContent = `<div style="text-align: left; font-size: 14px; color: #333;">`;
+
+                    // B. Info Header
+                    htmlContent += `<div style="margin-bottom: 15px;">
+                                        Nppwp/Customer ini sudah terdaftar di perusahaan <b>${nama_perusahaan}</b>.
+                                    </div>`;
+
+                    // C. Bagian Lawyer
+                    if (lawyer_rejected) {
+                        htmlContent += `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+                                <div style="padding-right: 15px; width: 70%;">
+                                    <b>Catatan Lawyer:</b><br/> "${note ?? '-'}"
+                                </div>
+                                <div style="width: 30%; text-align: right;">
+                                    ${lawyer_file ? 
+                                        `<a href="${lawyer_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">📄 Lampiran Lawyer</a>` : ''
+                                    }
+                                </div>
+                            </div>`;
+                    }
+
+                    // D. Bagian Auditor
+                    if (auditor_note) {
+                        htmlContent += `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div style="padding-right: 15px; width: 70%;">
+                                    <b>Catatan Auditor:</b><br/> "${auditor_note_text ?? '-'}"
+                                </div>
+                                <div style="width: 30%; text-align: right;">
+                                    ${auditor_file ? 
+                                        `<a href="${auditor_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">📄 Lampiran Auditor</a>` : ''
+                                    }
+                                </div>
+                            </div>`;
+                    }
+
+                    // E. Pertanyaan Konfirmasi
+                    htmlContent += `
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px dashed #ccc; text-align: center; font-weight: bold; color: #d33; font-size: 16px;">
+                            Apakah anda yakin ingin menambahkan?
+                        </div>`;
+                    
+                    htmlContent += `</div>`;
+
+                    // F. Tampilkan SweetAlert
+                    const result = await Swal.fire({
+                        position: 'top',
+                        html: htmlContent,
+                        icon: null,
+                        width: '650px',
+                        showCancelButton: true,
+                        confirmButtonText: 'Submit',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#3085d6',
+                        cancelButtonColor: '#d33',
+                        reverseButtons: true,
+                        allowOutsideClick: false
+                    });
+
+                    // G. Cek Keputusan User
+                    if (!result.isConfirmed) {
+                        setIsLoading(false);
+                        return; // STOP jika user batal
+                    }
+
+                }
+            } catch (error) {
+                console.error("Error checking NPWP:", error);
+                // Opsional: Alert jika error server, atau lanjut saja
+            }
+        }
 
         if (userRole === 'lawyer' && decision === 'rejected') {
             if (!keterangan.trim()) {

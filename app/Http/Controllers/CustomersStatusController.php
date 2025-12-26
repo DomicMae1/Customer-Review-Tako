@@ -105,9 +105,9 @@ class CustomersStatusController extends Controller
     {
 
         $request->validate([
-            'customer_id' => 'required|exists:customers_statuses,id_Customer',
+            'customer_id' => 'required|exists:tako-perusahaan.customers_statuses,id_Customer',
             'keterangan' => 'nullable|string',
-            'attach_path'         => 'nullable|string', 
+            'attach_path'         => 'nullable|string',
             'attach_filename'     => 'nullable|string',
             'submit_1_timestamps' => 'nullable|date',
             'status_1_timestamps' => 'nullable|date',
@@ -116,15 +116,15 @@ class CustomersStatusController extends Controller
 
         $status = Customers_Status::where('id_Customer', $request->customer_id)->first();
         if (!$status) return back()->with('error', 'Data status customer tidak ditemukan.');
-        
+
         $customer = $status->customer;
 
         // 1. Ambil Info Perusahaan untuk Folder Name
         $idPerusahaan = $request->input('id_perusahaan');
         $perusahaan = Perusahaan::find($idPerusahaan);
-        
+
         // Default slug jika perusahaan tidak ketemu
-        $companySlug = 'general'; 
+        $companySlug = 'general';
         $emailsToNotify = [];
 
         if ($perusahaan) {
@@ -157,6 +157,89 @@ class CustomersStatusController extends Controller
 
         $role = $roleMap[$rawRole] ?? $rawRole;
         $now = Carbon::now();
+
+        $triggerRoles = ['user', 'manager', 'direktur'];
+
+        // Cek apakah User yang submit termasuk role tersebut
+        if (in_array($role, $triggerRoles)) {
+
+            $potentialDuplicates = Customer::with('perusahaan') // Only eager load same-db relations
+                ->whereKeyNot($customer->id)
+                ->where(function ($q) use ($customer) {
+                    $q->where('no_npwp', $customer->no_npwp)
+                        ->when($customer->no_npwp_16, fn($sq) => $sq->orWhere('no_npwp_16', $customer->no_npwp_16));
+                })
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $problematicCustomer = null;
+
+            // 2. Loop and check status manually
+            foreach ($potentialDuplicates as $duplicate) {
+                // Explicitly use the correct model and connection
+                $dupStatus = \App\Models\Customers_Status::on('tako-perusahaan')
+                    ->where('id_Customer', $duplicate->id)
+                    ->first();
+
+                if (!$dupStatus) continue;
+
+                // Check for issues
+                $isRejected = strtolower($dupStatus->status_3 ?? '') === 'rejected';
+                $hasAuditorNote = !empty($dupStatus->status_4_keterangan)
+                    && $dupStatus->status_4_keterangan != '-'
+                    && trim($dupStatus->status_4_keterangan) != '';
+
+                if ($isRejected || $hasAuditorNote) {
+                    // We found a problematic one!
+                    // Manually attach the status to the duplicate object so the email view can use it
+                    $duplicate->setRelation('status', $dupStatus);
+                    $problematicCustomer = $duplicate;
+                    break;
+                }
+            }
+
+            // Jika ditemukan data lama yang bermasalah, KIRIM EMAIL
+            if ($problematicCustomer) {
+
+                // A. Ambil Email Tujuan (Internal Perusahaan yang memiliki data ini)
+                // Mengambil dari kolom 'notify_1' pada tabel perusahaan
+                $emailsToNotify = [];
+                if ($perusahaan && !empty($perusahaan->notify_1)) {
+                    $emailsToNotify = explode(',', $perusahaan->notify_1);
+                }
+
+                // Fallback (Jaga-jaga jika email kosong)
+                if (empty($emailsToNotify)) {
+                    $emailsToNotify = ['default@internal-perusahaan.com'];
+                }
+
+                // B. Filter Email (Validasi format)
+                $validEmails = collect($emailsToNotify)
+                    ->map(fn($email) => trim($email))
+                    ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+                    ->unique()
+                    ->toArray();
+
+                // dd([$problematicCustomer->status], [$customer->id]);
+
+                // C. Eksekusi Pengiriman
+                if (!empty($validEmails)) {
+                    Log::info("Mengirim Alert Duplikat NPWP (Oleh: $role) ke:", $validEmails);
+
+                    try {
+                        // GANTI CLASS INI
+                        Mail::to($validEmails)->send(new \App\Mail\CustomerAlert(
+                            $user,                                                      // User yang submit
+                            $customer,                                                  // Customer baru
+                            $problematicCustomer,                                       // Customer lama
+                            $problematicCustomer->status,
+                        ));
+                    } catch (\Exception $e) {
+                        Log::error("Gagal kirim email alert duplikat: " . $e->getMessage());
+                    }
+                }
+            }
+        }
 
         if ($request->filled('submit_1_timestamps')) $status->submit_1_timestamps = $request->input('submit_1_timestamps');
         if ($request->filled('status_1_timestamps')) {
@@ -193,7 +276,7 @@ class CustomersStatusController extends Controller
         $finalFilename = $request->input('attach_filename');
         $finalPath = $request->input('attach_path');
 
-        if (!in_array($role, ['user','manager','direktur','lawyer','auditor'])) {
+        if (!in_array($role, ['user', 'manager', 'direktur', 'lawyer', 'auditor'])) {
             $finalFilename = null;
             $finalPath = null;
         }

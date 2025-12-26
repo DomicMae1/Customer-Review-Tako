@@ -16,7 +16,7 @@
     <p>{{ $status->status_3_keterangan }}</p>
     @endif
 
-    <p>Silakan cek kembali hasil review anda.</p>
+    <p><i>Silakan cek lampiran email ini untuk file pendukung.</i></p>
 </body>
 
 </html>
