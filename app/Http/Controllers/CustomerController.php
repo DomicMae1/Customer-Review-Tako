@@ -984,49 +984,97 @@ class CustomerController extends Controller
         ]);
 
         // 1. Cari customer berdasarkan NPWP 15 digit atau NPWP 16 digit
-        $customer = Customer::where('no_npwp', $request->no_npwp)
-            ->orWhere('no_npwp_16', $request->no_npwp_16)
-            ->first();
+        $customers = Customer::with('perusahaan')
+            ->where(function ($query) use ($request) {
+                $query->where('no_npwp', $request->no_npwp)
+                    ->when($request->no_npwp_16, function ($q) use ($request) {
+                        $q->orWhere('no_npwp_16', $request->no_npwp_16);
+                    });
+            })
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        // Jika customer tidak ditemukan
-        if (!$customer) {
-            return response()->json([
-                'exists' => false,
-            ]);
+        if ($customers->isEmpty()) {
+            return response()->json(['exists' => false]);
         }
 
-        // 2. Ambil id customer
-        $customerId = $customer->id;
+        // Lawyer Data
+        $lawyerRejected = false;
+        $lawyerNote = null;
+        $lawyerFile = null;
+        $lawyerCompany = null; // Nama perusahaan tempat lawyer reject
 
-        // 3. Ambil data status dari tabel customer_statuses
-        $status = Customers_Status::where('id_Customer', $customerId)->first();
+        // Auditor Data
+        $auditorHasNote = false;
+        $auditorNoteText = null;
+        $auditorFile = null;
+        $auditorCompany = null;
 
-        // Jika tidak ada record status
-        if (!$status) {
+        foreach ($customers as $customer) {
+            $compName = $customer->perusahaan->nama_perusahaan ?? 'Tanpa Nama Perusahaan';
+            $allCompanyNames[] = $compName;
 
-            return response()->json([
-                'exists' => true,
-                'lawyer_rejected' => false,
-                'note' => null,
-                'auditor_note' => false,
-                'auditor_note_text' => null,
-            ]);
+            $status = Customers_Status::on('tako-perusahaan')
+                ->where('id_Customer', $customer->id)
+                ->first();
+            if (!$status) continue;
+
+            // A. Cek Reject Lawyer
+            // Ambil data reject PERTAMA yang ditemukan
+            if (!$lawyerRejected && strtolower($status->status_3 ?? '') === 'rejected') {
+                $lawyerRejected = true;
+                $lawyerNote = $status->status_3_keterangan;
+                $lawyerFile = !empty($status->submit_3_path) ? route('file.view', ['path' => $status->submit_3_path]) : null;
+                $lawyerCompany = $compName; // <--- Simpan nama perusahaan spesifik ini
+            }
+
+            // B. Cek Catatan Auditor
+            // Ambil data note PERTAMA yang ditemukan
+            if (!$auditorHasNote && !empty($status->status_4_keterangan)) {
+                $auditorHasNote = true;
+                $auditorNoteText = $status->status_4_keterangan;
+                $auditorFile = !empty($status->status_4_path) ? route('file.view', ['path' => $status->status_4_path]) : null;
+                $auditorCompany = $compName; // <--- Simpan nama perusahaan spesifik ini
+            }
+        };
+
+        // Jika ada masalah, kita prioritaskan menampilkan nama perusahaan yang bermasalah
+        $problematicCompanies = [];
+
+        if ($lawyerRejected && $lawyerCompany) {
+            $problematicCompanies[] = $lawyerCompany;
         }
 
-        // 4. Cek lawyer reject (status_3)
-        $isRejected = strtolower($status->status_3 ?? '') === 'rejected';
+        if ($auditorHasNote && $auditorCompany) {
+            // Cek agar tidak duplikat jika perusahaannya sama dengan lawyer
+            if ($auditorCompany !== $lawyerCompany) {
+                $problematicCompanies[] = $auditorCompany . " (Catatan Auditor)";
+            } elseif (!$lawyerRejected) {
+                $problematicCompanies[] = $auditorCompany . " (Catatan Auditor)";
+            }
+        }
 
-        // 5. Cek apakah auditor menambahkan catatan (status_4_keterangan)
-        $auditorHasNote = !empty($status->status_4_keterangan);
+        // if (!empty($problematicCompanies)) {
+        //     // Tampilkan perusahaan yang bermasalah saja agar user fokus
+        //     $finalCompanyNameDisplay = implode(', ', $problematicCompanies);
+        // } else {
+        //     // Jika BERSIH (tidak ada masalah), tampilkan semua list perusahaan unik
+        //     $finalCompanyNameDisplay = implode(', ', array_unique($allCompanyNames));
+        // }
 
         return response()->json([
             'exists' => true,
-            // Lawyer reject
-            'lawyer_rejected' => $isRejected,
-            'note' => $isRejected ? ($status->status_3_keterangan ?? null) : null,
-            // Auditor note
+            'nama_perusahaan' => $problematicCompanies, // Ini yang akan muncul di bold header alert
+
+            // Data Lawyer
+            'lawyer_rejected' => $lawyerRejected,
+            'note' => $lawyerNote,
+            'lawyer_file' => $lawyerFile,
+
+            // Data Auditor
             'auditor_note' => $auditorHasNote,
-            'auditor_note_text' => $auditorHasNote ? $status->status_4_keterangan : null,
+            'auditor_note_text' => $auditorNoteText,
+            'auditor_file' => $auditorFile,
         ]);
     }
 }
