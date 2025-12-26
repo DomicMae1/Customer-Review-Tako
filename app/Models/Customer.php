@@ -14,7 +14,7 @@ class Customer extends Model
 
     protected $connection = 'tako-customer';
     protected $table = 'customers';
-    protected $primaryKey = 'id'; 
+    protected $primaryKey = 'id';
 
     protected $fillable = [
         'uid',
@@ -45,15 +45,17 @@ class Customer extends Model
 
     protected static function booted()
     {
-        static::created(function ($customer) {
-            // Kita ambil tahun dan bulan saat ini
-            $prefix = now()->format('Y-m'); // Hasil: 2025-11
-            
-            // Update kolom uid
-            $customer->uid = $prefix . '-' . $customer->id;
-            
-            // Simpan perubahan tanpa memicu event 'updated' (agar hemat resource)
-            $customer->saveQuietly();
+        static::creating(function ($customer) {
+            $prefix = now()->format('Ym'); // 202512
+
+            do {
+                $random = random_int(100000, 999999); // 6 digit
+                $uid = $prefix . $random;
+            } while (
+                self::where('uid', $uid)->exists()
+            );
+
+            $customer->uid = $uid;
         });
     }
 
