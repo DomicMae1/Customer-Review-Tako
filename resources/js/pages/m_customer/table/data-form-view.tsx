@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Attachment, MasterCustomer } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import Swal from 'sweetalert2';
 import axios from 'axios';
 import { File, Loader2, SquareCheck, SquareX } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 
 interface UploadedFileState {
     path: string;
@@ -138,18 +138,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                     no_npwp_16: customer.no_npwp_16,
                 });
 
-                console.log("RESPONSE BACKEND:", res.data);
-
-                const { 
-                    exists, 
-                    nama_perusahaan, 
-                    lawyer_rejected, 
-                    note, 
-                    lawyer_file, 
-                    auditor_note, 
-                    auditor_note_text, 
-                    auditor_file 
-                } = res.data;
+                const { exists, nama_perusahaan, lawyer_rejected, note, lawyer_file, auditor_note, auditor_note_text, auditor_file } = res.data;
 
                 if (exists) {
                     // A. Mulai Susun HTML (Wrapper)
@@ -157,7 +146,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
                     // B. Info Header
                     htmlContent += `<div style="margin-bottom: 15px;">
-                                        Nppwp/Customer ini sudah terdaftar di perusahaan <b>${nama_perusahaan}</b>.
+                                        Npwp/Customer ini sudah terdaftar di perusahaan <b>${nama_perusahaan}</b>.
                                     </div>`;
 
                     // C. Bagian Lawyer
@@ -168,8 +157,10 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                                     <b>Catatan Lawyer:</b><br/> "${note ?? '-'}"
                                 </div>
                                 <div style="width: 30%; text-align: right;">
-                                    ${lawyer_file ? 
-                                        `<a href="${lawyer_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">📄 Lampiran Lawyer</a>` : ''
+                                    ${
+                                        lawyer_file
+                                            ? `<a href="${lawyer_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">📄 Lampiran Lawyer</a>`
+                                            : ''
                                     }
                                 </div>
                             </div>`;
@@ -183,8 +174,10 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                                     <b>Catatan Auditor:</b><br/> "${auditor_note_text ?? '-'}"
                                 </div>
                                 <div style="width: 30%; text-align: right;">
-                                    ${auditor_file ? 
-                                        `<a href="${auditor_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">📄 Lampiran Auditor</a>` : ''
+                                    ${
+                                        auditor_file
+                                            ? `<a href="${auditor_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">📄 Lampiran Auditor</a>`
+                                            : ''
                                     }
                                 </div>
                             </div>`;
@@ -195,7 +188,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         <div style="margin-top: 20px; padding-top: 15px; border-top: 2px dashed #ccc; text-align: center; font-weight: bold; color: #d33; font-size: 16px;">
                             Apakah anda yakin ingin menambahkan?
                         </div>`;
-                    
+
                     htmlContent += `</div>`;
 
                     // F. Tampilkan SweetAlert
@@ -210,7 +203,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         confirmButtonColor: '#3085d6',
                         cancelButtonColor: '#d33',
                         reverseButtons: true,
-                        allowOutsideClick: false
+                        allowOutsideClick: false,
                     });
 
                     // G. Cek Keputusan User
@@ -218,10 +211,9 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         setIsLoading(false);
                         return; // STOP jika user batal
                     }
-
                 }
             } catch (error) {
-                console.error("Error checking NPWP:", error);
+                console.error('Error checking NPWP:', error);
                 // Opsional: Alert jika error server, atau lanjut saja
             }
         }

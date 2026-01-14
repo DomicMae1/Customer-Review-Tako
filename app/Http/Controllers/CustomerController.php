@@ -983,7 +983,6 @@ class CustomerController extends Controller
             'no_npwp_16' => 'nullable|string',
         ]);
 
-        // 1. Cari customer berdasarkan NPWP 15 digit atau NPWP 16 digit
         $customers = Customer::with('perusahaan')
             ->where(function ($query) use ($request) {
                 $query->where('no_npwp', $request->no_npwp)
@@ -998,73 +997,64 @@ class CustomerController extends Controller
             return response()->json(['exists' => false]);
         }
 
-        // Lawyer Data
         $lawyerRejected = false;
         $lawyerNote = null;
         $lawyerFile = null;
-        $lawyerCompany = null; // Nama perusahaan tempat lawyer reject
-
-        // Auditor Data
+        
         $auditorHasNote = false;
         $auditorNoteText = null;
         $auditorFile = null;
-        $auditorCompany = null;
+
+        $problematicCompanies = []; // Hanya untuk yang reject/note
+        $allCompanyNames = [];      // Untuk menampung SEMUA perusahaan tempat NPWP ini ada
 
         foreach ($customers as $customer) {
             $compName = $customer->perusahaan->nama_perusahaan ?? 'Tanpa Nama Perusahaan';
+            
             $allCompanyNames[] = $compName;
 
             $status = Customers_Status::on('tako-perusahaan')
                 ->where('id_Customer', $customer->id)
                 ->first();
+            
             if (!$status) continue;
 
-            // A. Cek Reject Lawyer
-            // Ambil data reject PERTAMA yang ditemukan
             if (!$lawyerRejected && strtolower($status->status_3 ?? '') === 'rejected') {
                 $lawyerRejected = true;
                 $lawyerNote = $status->status_3_keterangan;
                 $lawyerFile = !empty($status->submit_3_path) ? route('file.view', ['path' => $status->submit_3_path]) : null;
-                $lawyerCompany = $compName; // <--- Simpan nama perusahaan spesifik ini
+                $problematicCompanies[] = $compName ;
             }
 
-            // B. Cek Catatan Auditor
-            // Ambil data note PERTAMA yang ditemukan
             if (!$auditorHasNote && !empty($status->status_4_keterangan)) {
                 $auditorHasNote = true;
                 $auditorNoteText = $status->status_4_keterangan;
                 $auditorFile = !empty($status->status_4_path) ? route('file.view', ['path' => $status->status_4_path]) : null;
-                $auditorCompany = $compName; // <--- Simpan nama perusahaan spesifik ini
+                
+                $isAlreadyListed = false;
+                foreach($problematicCompanies as $pc) {
+                    if(str_contains($pc, $compName)) {
+                        $isAlreadyListed = true; break;
+                    }
+                }
+                
+                if (!$isAlreadyListed) {
+                    $problematicCompanies[] = $compName ;
+                }
             }
         };
+        
+        $finalDisplayCompanies = [];
 
-        // Jika ada masalah, kita prioritaskan menampilkan nama perusahaan yang bermasalah
-        $problematicCompanies = [];
-
-        if ($lawyerRejected && $lawyerCompany) {
-            $problematicCompanies[] = $lawyerCompany;
+        if (!empty($problematicCompanies)) {
+            $finalDisplayCompanies = $problematicCompanies;
+        } else {
+            $finalDisplayCompanies = array_values(array_unique($allCompanyNames));
         }
-
-        if ($auditorHasNote && $auditorCompany) {
-            // Cek agar tidak duplikat jika perusahaannya sama dengan lawyer
-            if ($auditorCompany !== $lawyerCompany) {
-                $problematicCompanies[] = $auditorCompany . " (Catatan Auditor)";
-            } elseif (!$lawyerRejected) {
-                $problematicCompanies[] = $auditorCompany . " (Catatan Auditor)";
-            }
-        }
-
-        // if (!empty($problematicCompanies)) {
-        //     // Tampilkan perusahaan yang bermasalah saja agar user fokus
-        //     $finalCompanyNameDisplay = implode(', ', $problematicCompanies);
-        // } else {
-        //     // Jika BERSIH (tidak ada masalah), tampilkan semua list perusahaan unik
-        //     $finalCompanyNameDisplay = implode(', ', array_unique($allCompanyNames));
-        // }
 
         return response()->json([
             'exists' => true,
-            'nama_perusahaan' => $problematicCompanies, // Ini yang akan muncul di bold header alert
+            'nama_perusahaan' => $finalDisplayCompanies,
 
             // Data Lawyer
             'lawyer_rejected' => $lawyerRejected,

@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::connection('tako-customer')->create('customers', function (Blueprint $table) {
             $table->id();
-            $table->string('uid')->nullable()->unique()->after('id');
+            $table->string('uid')->nullable()->index()->after('id');
 
             $table->unsignedBigInteger('id_user');         
             $table->unsignedBigInteger('id_perusahaan'); 

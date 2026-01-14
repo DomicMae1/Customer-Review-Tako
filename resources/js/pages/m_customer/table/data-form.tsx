@@ -243,18 +243,17 @@ export default function CustomerForm({
                 no_npwp_16: data.no_npwp_16,
             });
 
-            const { exists,nama_perusahaan, lawyer_rejected, note,lawyer_file, auditor_note, auditor_note_text, auditor_file} = res.data;
+            const { exists, nama_perusahaan, lawyer_rejected, note, lawyer_file, auditor_note, auditor_note_text, auditor_file } = res.data;
 
             if (exists) {
-            
-            let htmlContent = `<div style="text-align: left; font-size: 14px; color: #333;">`;
+                let htmlContent = `<div style="text-align: left; font-size: 14px; color: #333;">`;
 
-            htmlContent += `<div style="margin-bottom: 15px;">
-                                Nppwp/Customer ini sudah terdaftar di perusahaan <b>${nama_perusahaan}</b>.
+                htmlContent += `<div style="margin-bottom: 15px;">
+                                Npwp/Customer ini sudah terdaftar di perusahaan <b>${nama_perusahaan}</b>.
                             </div>`;
 
-            if (lawyer_rejected) {
-                htmlContent += `
+                if (lawyer_rejected) {
+                    htmlContent += `
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
                         
                         <div style="padding-right: 15px; width: 70%;">
@@ -263,18 +262,20 @@ export default function CustomerForm({
                         </div>
 
                         <div style="width: 30%; text-align: right;">
-                            ${lawyer_file ? 
-                                `<a href="${lawyer_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">
+                            ${
+                                lawyer_file
+                                    ? `<a href="${lawyer_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">
                                     📄 Lampiran Lawyer
-                                </a>` : ''
+                                </a>`
+                                    : ''
                             }
                         </div>
                     </div>
                 `;
-            }
+                }
 
-            if (auditor_note) {
-                htmlContent += `
+                if (auditor_note) {
+                    htmlContent += `
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         
                         <div style="padding-right: 15px; width: 70%;">
@@ -283,47 +284,49 @@ export default function CustomerForm({
                         </div>
 
                         <div style="width: 30%; text-align: right;">
-                            ${auditor_file ? 
-                                `<a href="${auditor_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">
+                            ${
+                                auditor_file
+                                    ? `<a href="${auditor_file}" target="_blank" style="white-space: nowrap; color: #2563eb; text-decoration: underline; font-weight: 600; font-size: 13px;">
                                     📄 Lampiran Auditor
-                                </a>` : ''
+                                </a>`
+                                    : ''
                             }
                         </div>
                     </div>
                 `;
-            }
+                }
 
-            htmlContent += `
+                htmlContent += `
                 <div style="margin-top: 20px; padding-top: 15px; border-top: 2px dashed #ccc; text-align: center; font-weight: bold; color: #d33; font-size: 16px;">
                     Apakah anda yakin ingin menambahkan?
                 </div>
             `;
-            
-            htmlContent += `</div>`; 
 
-            const result = await Swal.fire({
-                position: 'top', 
-                html: htmlContent, 
-                icon: null, 
-                width: '650px',
-                
-                showCancelButton: true,
-                confirmButtonText: 'Simpan',
-                cancelButtonText: 'Batal',
-                confirmButtonColor: '#3085d6', 
-                cancelButtonColor: '#d33',    
-                reverseButtons: true,        
-                allowOutsideClick: false,     
-                
-                showClass: { popup: '' },
-                hideClass: { popup: '' }
-            });
+                htmlContent += `</div>`;
 
-            if (!result.isConfirmed) {
-                setIsLoading(false);
-                return; 
+                const result = await Swal.fire({
+                    position: 'top',
+                    html: htmlContent,
+                    icon: null,
+                    width: '650px',
+
+                    showCancelButton: true,
+                    confirmButtonText: 'Simpan',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    reverseButtons: true,
+                    allowOutsideClick: false,
+
+                    showClass: { popup: '' },
+                    hideClass: { popup: '' },
+                });
+
+                if (!result.isConfirmed) {
+                    setIsLoading(false);
+                    return;
+                }
             }
-        }
 
             if (!data.kategori_usaha) {
                 const message = 'Kategori usaha wajib dipilih';

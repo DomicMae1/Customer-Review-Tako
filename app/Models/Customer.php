@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Perusahaan;
 use App\Models\CustomerAttach;
@@ -17,7 +18,6 @@ class Customer extends Model
     protected $primaryKey = 'id';
 
     protected $fillable = [
-        'uid',
         'id_user',
         'id_perusahaan',
         'kategori_usaha',
@@ -46,14 +46,52 @@ class Customer extends Model
     protected static function booted()
     {
         static::creating(function ($customer) {
-            $prefix = now()->format('Ym'); // 202512
+            $existingUid = null;
+
+            if (!empty($customer->no_npwp) || !empty($customer->no_npwp_16)) {
+                 $existingUid = DB::connection('tako-customer')
+                    ->table('customers')
+                    ->whereNotNull('uid')
+                    ->where(function($q) use ($customer) {
+                        if (!empty($customer->no_npwp)) {
+                            $q->orWhere('no_npwp', trim($customer->no_npwp));
+                        }
+                        if (!empty($customer->no_npwp_16)) {
+                            $q->orWhere('no_npwp_16', trim($customer->no_npwp_16));
+                        }
+                    })
+                    ->orderBy('created_at', 'asc') 
+                    ->value('uid');
+            }
+
+            if ($existingUid) {
+                $customer->uid = $existingUid;
+                return; 
+            }
+
+            $prefix = now()->format('Ym');
+            $uid = null;
+            $maxAttempts = 50;
+            $attempt = 0;
 
             do {
-                $random = random_int(100000, 999999); // 6 digit
-                $uid = $prefix . $random;
-            } while (
-                self::where('uid', $uid)->exists()
-            );
+                $attempt++;
+                $random = random_int(100000, 999999);
+                $candidateUid = $prefix . $random;
+                $exists = DB::connection('tako-customer')
+                            ->table('customers')
+                            ->where('uid', $candidateUid)
+                            ->exists();
+                
+                if (!$exists) {
+                    $uid = $candidateUid;
+                }
+
+                if ($attempt >= $maxAttempts) {
+                    $uid = $prefix . random_int(10, 99) . time(); 
+                }
+
+            } while ($uid === null);
 
             $customer->uid = $uid;
         });
