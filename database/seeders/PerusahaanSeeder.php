@@ -15,7 +15,15 @@ class PerusahaanSeeder extends Seeder
             ['nama_perusahaan' => 'PT Beta', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'beta'],
             ['nama_perusahaan' => 'UD Cherry', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'cherry'],
             ['nama_perusahaan' => 'CV Delta', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'delta'],
-            ['nama_perusahaan' => 'OD Bravo', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'bravo'],
+            ['nama_perusahaan' => 'Amin Trans', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'amintrans'],
+            ['nama_perusahaan' => 'Aji Logistic', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'ajilogistic'],
+            ['nama_perusahaan' => 'Anugerah Multi Logistik', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'amlogistik'],
+            ['nama_perusahaan' => 'Anugerah Berkat Transportasi', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'anugerahberkat'],
+            ['nama_perusahaan' => 'Bersama Anugerah Pandawa', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'anugerahpandawa'],
+            ['nama_perusahaan' => 'Anugerah Trans Maritim', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'atmtrans'],
+            ['nama_perusahaan' => 'Berlian Anugerah Transportasi', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'berliananugerah'],
+            ['nama_perusahaan' => 'Cahaya Abadi Logistik', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'cahayalogistik'],
+            ['nama_perusahaan' => 'Pint Indonesia Logistik', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'pintlogistik'],
         ];
 
         foreach ($perusahaans as $data) {
