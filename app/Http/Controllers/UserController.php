@@ -100,6 +100,7 @@ class UserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:users,email,' . $user->id,
             'password' => ['sometimes', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|exists:roles,id',
+            'id_perusahaan' => 'nullable|exists:perusahaan,id',
         ]);
 
         try {
@@ -112,9 +113,15 @@ class UserController extends Controller
                 $data['password'] = Hash::make($request->password);
             }
 
-            $user->update($data);
-
             $role = Role::findOrFail($request->role);
+
+            if ($role->name === 'user') {
+                $data['id_perusahaan'] = $request->id_perusahaan;
+            } else {
+                $data['id_perusahaan'] = null;
+            }
+
+            $user->update($data);
             $user->syncRoles([$role->name]);
 
             return redirect()->route('users.index')->with('message', 'User updated successfully.');

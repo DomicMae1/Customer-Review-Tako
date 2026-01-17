@@ -19,8 +19,17 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+interface Perusahaan {
+    id: number;
+    nama_perusahaan: string;
+}
+
 export default function ManageUsers() {
-    const { users, roles } = usePage().props as unknown as { users: User[]; roles: Role[] };
+    const { users, roles, companies } = usePage().props as unknown as {
+        users: User[];
+        roles: Role[];
+        companies: Perusahaan[]; // Tambahkan ini
+    };
     const [openDelete, setOpenDelete] = useState(false);
     const [userIdToDelete, setUserIdToDelete] = useState<number | null>(null);
     const [openEdit, setOpenEdit] = useState(false);
@@ -28,6 +37,9 @@ export default function ManageUsers() {
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
     const [editRole, setEditRole] = useState<string>('');
+    const [editCompany, setEditCompany] = useState<string>('');
+
+    const selectedEditRoleName = roles.find((role) => String(role.id) === editRole)?.name;
 
     const userToDelete = users.find((u) => u.id === userIdToDelete);
 
@@ -38,6 +50,7 @@ export default function ManageUsers() {
             setEditName(user.name);
             setEditEmail(user.email);
             setEditRole(user.roles && user.roles.length > 0 ? String(user.roles[0].id) : '');
+            setEditCompany(user.id_perusahaan ? String(user.id_perusahaan) : '');
             setOpenEdit(true);
         }
     };
@@ -71,10 +84,16 @@ export default function ManageUsers() {
             return;
         }
 
+        if (selectedEditRoleName === 'user' && !editCompany) {
+            toast.error('Please select a company for User role.');
+            return;
+        }
+
         const data = {
             name: editName,
             email: editEmail,
             role: editRole,
+            id_perusahaan: selectedEditRoleName === 'user' ? editCompany : null,
         };
 
         if (userIdToEdit !== null) {
@@ -85,6 +104,7 @@ export default function ManageUsers() {
                     setEditName('');
                     setEditEmail('');
                     setEditRole('');
+                    setEditCompany('');
                     toast.success('User updated successfully!');
                 },
                 onError: (errors) => {
@@ -139,6 +159,7 @@ export default function ManageUsers() {
                         setEditName('');
                         setEditEmail('');
                         setEditRole('');
+                        setEditCompany('');
                     }
                 }}
             >
@@ -177,6 +198,25 @@ export default function ManageUsers() {
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {selectedEditRoleName === 'user' && (
+                            <div>
+                                <Label htmlFor="edit_company">Perusahaan</Label>
+                                <Select onValueChange={setEditCompany} value={editCompany}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select a company" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {companies.map((comp) => (
+                                            <SelectItem key={comp.id} value={String(comp.id)}>
+                                                {comp.nama_perusahaan}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
                         <DialogFooter className="sm:justify-start">
                             <Button type="submit">Save</Button>
                             <DialogClose asChild>
