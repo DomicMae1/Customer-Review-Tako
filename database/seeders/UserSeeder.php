@@ -36,7 +36,7 @@ class UserSeeder extends Seeder
             ['name' => 'David Manager', 'email' => 'david.manager@tako.co.id', 'password' => 'CR_tako@2025', 'role' => 'manager'],
             ['name' => 'David Direktur', 'email' => 'david.direktur@tako.co.id', 'password' => 'CR_tako@2025', 'role' => 'direktur'],
             ['name' => 'David Lawyer', 'email' => 'david.lawyer@tako.co.id', 'password' => 'CR_tako@2025', 'role' => 'lawyer'],
-            ['name' => 'David Admin', 'email' => 'david.admin@tako.co.id', 'password' => 'CR_tako@2025', 'role' => 'admin'],
+            ['name' => 'David Admin', 'email' => 'david.yordan@tako.co.id', 'password' => 'CR_tako@2025', 'role' => 'admin'],
             ['name' => 'David Auditor', 'email' => 'david.auditor@tako.co.id', 'password' => 'CR_tako@2025', 'role' => 'auditor'],
         ];
 
