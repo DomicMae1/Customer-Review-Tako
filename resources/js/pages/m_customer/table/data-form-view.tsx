@@ -131,14 +131,32 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
         }
         setIsLoading(true);
 
+        let historyData: any = null;
+
         if (isCreator) {
             try {
                 const res = await axios.post(route('customer.check-npwp'), {
                     no_npwp: customer.no_npwp, // Gunakan data dari prop customer
                     no_npwp_16: customer.no_npwp_16,
+                    current_id: customer.id,
                 });
 
-                const { exists, nama_perusahaan, lawyer_rejected, note, lawyer_file, auditor_note, auditor_note_text, auditor_file } = res.data;
+                console.log(res);
+
+                const {
+                    exists,
+                    nama_perusahaan,
+                    lawyer_rejected,
+                    note,
+                    lawyer_file,
+                    lawyer_by,
+                    lawyer_raw_path,
+                    auditor_note,
+                    auditor_note_text,
+                    auditor_file,
+                    auditor_by,
+                    auditor_raw_path,
+                } = res.data;
 
                 if (exists) {
                     // A. Mulai Susun HTML (Wrapper)
@@ -211,6 +229,24 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         setIsLoading(false);
                         return; // STOP jika user batal
                     }
+
+                    historyData = {
+                        lawyer: lawyer_rejected
+                            ? {
+                                  status: 'rejected',
+                                  keterangan: note,
+                                  by: lawyer_by,
+                                  path: lawyer_raw_path, // Path murni database
+                              }
+                            : null,
+                        auditor: auditor_note
+                            ? {
+                                  keterangan: auditor_note_text,
+                                  by: auditor_by,
+                                  path: auditor_raw_path, // Path murni database
+                              }
+                            : null,
+                    };
                 }
             } catch (error) {
                 console.error('Error checking NPWP:', error);
@@ -310,6 +346,34 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
         // Kirim Keterangan (Jika ada)
         if (showExtraFields && keterangan) {
             formData.append('keterangan', keterangan);
+        }
+
+        if (historyData) {
+            // 1. Inject Data Lawyer ke formData (agar masuk ke tabel status baru)
+            if (historyData.lawyer) {
+                formData.append('status_3', historyData.lawyer.status);
+                formData.append('status_3_by', historyData.lawyer.by); // Paksa status rejected
+
+                if (historyData.lawyer.keterangan) {
+                    formData.append('status_3_keterangan', historyData.lawyer.keterangan);
+                }
+                // Kirim path lama ke kolom submit_3_path
+                if (historyData.lawyer.path) {
+                    formData.append('submit_3_path', historyData.lawyer.path);
+                }
+            }
+
+            // 2. Inject Data Auditor ke formData (agar masuk ke tabel status baru)
+            if (historyData.auditor) {
+                formData.append('status_4_by', historyData.auditor.by);
+                if (historyData.auditor.keterangan) {
+                    formData.append('status_4_keterangan', historyData.auditor.keterangan);
+                }
+                // Kirim path lama ke kolom status_4_path
+                if (historyData.auditor.path) {
+                    formData.append('status_4_path', historyData.auditor.path);
+                }
+            }
         }
 
         let isDirekturCreatorSubmit = false;

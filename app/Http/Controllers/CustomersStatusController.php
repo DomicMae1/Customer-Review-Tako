@@ -201,8 +201,6 @@ class CustomersStatusController extends Controller
             // Jika ditemukan data lama yang bermasalah, KIRIM EMAIL
             if ($problematicCustomer) {
 
-                // A. Ambil Email Tujuan (Internal Perusahaan yang memiliki data ini)
-                // Mengambil dari kolom 'notify_1' pada tabel perusahaan
                 $emailsToNotify = [];
                 if ($perusahaan && !empty($perusahaan->notify_1)) {
                     $emailsToNotify = explode(',', $perusahaan->notify_1);
@@ -213,16 +211,12 @@ class CustomersStatusController extends Controller
                     $emailsToNotify = ['default@internal-perusahaan.com'];
                 }
 
-                // B. Filter Email (Validasi format)
                 $validEmails = collect($emailsToNotify)
                     ->map(fn($email) => trim($email))
                     ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
                     ->unique()
                     ->toArray();
 
-                // dd([$problematicCustomer->status], [$customer->id]);
-
-                // C. Eksekusi Pengiriman
                 if (!empty($validEmails)) {
                     Log::info("Mengirim Alert Duplikat NPWP (Oleh: $role) ke:", $validEmails);
 
@@ -252,26 +246,6 @@ class CustomersStatusController extends Controller
         }
         $isDirekturCreator = ($customer->id_user === $userId && $role === 'direktur');
         $isManagerCreator = ($customer->id_user === $userId && $role === 'manager');
-
-        // $customer = $status->customer;
-
-        // if ($request->hasFile('attach') && !$request->filled('attach_path')) {
-
-        //     $file = $request->file('attach');
-
-        //     $tempName = 'temp_' . uniqid() . '.pdf';
-        //     $tempPath = 'temp/' . $tempName;
-
-        //     Storage::disk('customers_external')->put(
-        //         $tempPath,
-        //         file_get_contents($file->getRealPath())
-        //     );
-
-        //     $request->merge([
-        //         'attach_path'     => $tempPath,
-        //         'attach_filename' => $file->getClientOriginalName(),
-        //     ]);
-        // }
 
         $finalFilename = $request->input('attach_filename');
         $finalPath = $request->input('attach_path');
@@ -404,6 +378,36 @@ class CustomersStatusController extends Controller
 
             default:
                 return back()->with('error', 'Role tidak dikenali.');
+        }
+
+        if ($request->filled('status_3') && $role !== 'lawyer') {
+            $status->status_3 = $request->input('status_3'); 
+            $status->status_3_by = $request->input('status_3_by');
+            
+            if ($request->filled('status_3_keterangan')) {
+                $status->status_3_keterangan = $request->input('status_3_keterangan');
+            }
+            
+            if ($request->filled('submit_3_path')) {
+                $status->submit_3_path = $request->input('submit_3_path');
+                $status->submit_3_nama_file = basename($request->input('submit_3_path')); 
+            }
+
+            $status->status_3_timestamps = $now; 
+        }
+
+        if (($request->filled('status_4_keterangan') || $request->filled('status_4_path')) && $role !== 'auditor') {
+            $status->status_4_by = $request->input('status_4_by');
+            if ($request->filled('status_4_keterangan')) {
+                $status->status_4_keterangan = $request->input('status_4_keterangan');
+            }
+
+            if ($request->filled('status_4_path')) {
+                $status->status_4_path = $request->input('status_4_path');
+                $status->status_4_nama_file = basename($request->input('status_4_path'));
+            }
+
+            $status->status_4_timestamps = $now;
         }
 
         $status->save();
