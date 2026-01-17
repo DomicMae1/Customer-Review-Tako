@@ -56,3 +56,17 @@ php artisan serve
 ```bash
 npm run dev
 ```
+
+## if want all data customer id 0 do in below
+
+```bash
+TRUNCATE TABLE customers_statuses;
+```
+
+```bash
+TRUNCATE TABLE customer_attaches;
+```
+
+```bash
+TRUNCATE TABLE customers RESTART IDENTITY CASCADE;
+```
