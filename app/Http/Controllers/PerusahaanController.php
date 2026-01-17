@@ -249,7 +249,22 @@ class PerusahaanController extends Controller
             $sync[$validated['id_User_3']] = ['role' => 'lawyer'];
         }
 
-        $perusahaan->users()->sync($sync);
+        $changes = $perusahaan->users()->sync($sync);
+
+        $userIdsToCheck = array_keys($sync);
+        
+        if (!empty($userIdsToCheck)) {
+            // Import model User di paling atas: use App\Models\User;
+            \App\Models\User::whereIn('id', $userIdsToCheck)->update([
+                'id_perusahaan' => $perusahaan->id
+            ]);
+        }
+
+        if (!empty($changes['detached'])) {
+            \App\Models\User::whereIn('id', $changes['detached'])
+                ->where('id_perusahaan', $perusahaan->id) // Hanya null-kan jika sebelumnya memang terikat di perusahaan ini
+                ->update(['id_perusahaan' => null]);
+        }
 
         return back()->with('success', 'Perusahaan berhasil diedit.');
     }

@@ -34,7 +34,17 @@ class CustomerController extends Controller
             throw UnauthorizedException::forPermissions(['view-master-customer']);
         }
 
-        $customerStatus = Customers_Status::on('tako-perusahaan')->get();
+        if ($user->hasRole(['user', 'manager', 'direktur']) && empty($user->id_perusahaan)) {
+            return Inertia::render('m_customer/page', [
+                'customers' => [], // Kirim data kosong
+                'company' => null,
+                'flash' => [
+                    'success' => null,
+                    'error' => 'Anda belum masuk di perusahaan manapun.', // Pesan Error
+                ],
+            ]);
+        }
+
         $query = Customer::with([
             'creator',
             'perusahaan',
@@ -54,16 +64,20 @@ class CustomerController extends Controller
                 $query->whereRaw('1 = 0');
             }
         } elseif ($user->hasRole(['manager', 'direktur', 'lawyer'])) {
-            $perusahaanIds = DB::connection('tako-perusahaan')
-                ->table('perusahaan_user_roles')
-                ->where('user_id', $user->id)
-                ->pluck('id_perusahaan')
-                ->toArray();
+            $isLawyerGlobal = $user->hasRole('lawyer') && empty($user->id_perusahaan);
+            if (!$isLawyerGlobal) {
+                $perusahaanIds = DB::connection('tako-perusahaan')
+                    ->table('perusahaan_user_roles')
+                    ->where('user_id', $user->id)
+                    ->pluck('id_perusahaan')
+                    ->toArray();
 
-            if (!empty($perusahaanIds)) {
-                $query->whereIn('id_perusahaan', $perusahaanIds);
-            } else {
-                $query->whereRaw('1 = 0');
+                if (!empty($perusahaanIds)) {
+                    $query->whereIn('id_perusahaan', $perusahaanIds);
+                } else {
+                    // Jika tidak punya akses ke perusahaan manapun, jangan tampilkan data
+                    $query->whereRaw('1 = 0');
+                }
             }
         }
 
@@ -636,11 +650,13 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasRole('auditor') && !$user->hasPermissionTo('view-master-customer')) {
+        $hasGlobalAccess = $user->hasRole('auditor') || ($user->hasRole('lawyer') && empty($user->id_perusahaan));
+
+        if (!$hasGlobalAccess && !$user->hasPermissionTo('view-master-customer')) {
             throw UnauthorizedException::forPermissions(['view-master-customer']);
         }
 
-        if ($user->hasRole('auditor')) {
+        if ($hasGlobalAccess) {
             $customer->load('attachments');
 
             return Inertia::render('m_customer/table/view-data-form', [
@@ -990,6 +1006,9 @@ class CustomerController extends Controller
                         $q->orWhere('no_npwp_16', $request->no_npwp_16);
                     });
             })
+            ->when($request->current_id, function ($q) use ($request) {
+                $q->where('id', '!=', $request->current_id);
+            })
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -1060,11 +1079,15 @@ class CustomerController extends Controller
             'lawyer_rejected' => $lawyerRejected,
             'note' => $lawyerNote,
             'lawyer_file' => $lawyerFile,
+            'lawyer_by' => $status->status_3_by ?? null,
+            'lawyer_raw_path' => $status->submit_3_path ?? null,
 
             // Data Auditor
             'auditor_note' => $auditorHasNote,
             'auditor_note_text' => $auditorNoteText,
             'auditor_file' => $auditorFile,
+            'auditor_by' => $status->status_4_by ?? null,
+            'auditor_raw_path' => $status->status_4_path ?? null,
         ]);
     }
 }
