@@ -19,7 +19,6 @@ class Perusahaan extends Model
         'domain',
         'notify_1',
         'notify_2',
-        'path_company_logo',
         'data',
         'id_User_1',
         'id_User_2',

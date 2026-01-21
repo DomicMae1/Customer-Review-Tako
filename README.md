@@ -64,6 +64,10 @@ TRUNCATE TABLE customers_statuses;
 ```
 
 ```bash
+TRUNCATE TABLE customer_links;
+```
+
+```bash
 TRUNCATE TABLE customer_attaches;
 ```
 

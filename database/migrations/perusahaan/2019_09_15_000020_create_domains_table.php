@@ -19,6 +19,7 @@ class CreateDomainsTable extends Migration
             $table->increments('id');    
             $table->string('domain', 255)->unique();
             $table->string('tenant_id');
+            $table->string('path_company_logo',)->nullable();
 
             $table->timestamps();
             $table->foreign('tenant_id')->references('id')->on('tenants')->onUpdate('cascade')->onDelete('cascade');

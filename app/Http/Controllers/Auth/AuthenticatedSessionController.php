@@ -35,8 +35,8 @@ class AuthenticatedSessionController extends Controller
             if ($company) {
                 $companyData = [
                     'nama_perusahaan' => $company->nama_perusahaan,
-                    'path_company_logo' => $company->path_company_logo 
-                        ? asset('storage/' . $company->path_company_logo) 
+                    'path_company_logo' => $domainRecord->path_company_logo 
+                        ? asset('storage/' . $domainRecord->path_company_logo) 
                         : null,
                 ];
             }
@@ -74,7 +74,7 @@ class AuthenticatedSessionController extends Controller
         // A. Cek di Tabel Domain
         // Mencari baris di tabel 'domains' yang kolom 'domain'-nya sama dengan $origin
         $domainRecord = \Stancl\Tenancy\Database\Models\Domain::where('domain', $origin)->first();
-
+        
         if ($domainRecord) {
             // B. Masuk ke Kolom Tenant & C. Ambil ID Perusahaan
             // $domainRecord->tenant otomatis mencari di tabel 'tenants' berdasarkan tenant_id milik domain
@@ -96,8 +96,8 @@ class AuthenticatedSessionController extends Controller
             session([
                 'company_id'   => $company->id,               // ID dari tabel perusahaan
                 'company_name' => $company->nama_perusahaan,  // Nama dari tabel perusahaan
-                'company_logo' => $company->path_company_logo // Logo dari tabel perusahaan
-                    ? asset('storage/' . $company->path_company_logo)
+                'company_logo' => $domainRecord->path_company_logo // Logo dari tabel perusahaan
+                    ? asset('storage/' . $domainRecord->path_company_logo)
                     : null,
                 'company_url'  => $origin,                    // URL akses saat ini
             ]);

@@ -16,7 +16,6 @@ return new class extends Migration
             $table->string('nama_perusahaan');
             $table->string('notify_1')->nullable();
             $table->string('notify_2')->nullable();
-            $table->string('path_company_logo',)->nullable();
             $table->json('data')->nullable();
 
             $table->timestamps();

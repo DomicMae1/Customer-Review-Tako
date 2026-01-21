@@ -26,14 +26,25 @@ class PerusahaanController extends Controller
             abort(403, 'Unauthorized access. Only admin can access this page.');
         }
 
-        $perusahaans = Perusahaan::with(['user', 'users','tenant','tenant.domains'])->get();
+        $perusahaans = Perusahaan::with(['user', 'users', 'tenant', 'tenant.domains'])->get();
+
         $perusahaans->transform(function ($company) {
-            $company->logo_url = $company->path_company_logo 
-                ? Storage::url($company->path_company_logo) 
+            // Logika Baru: Mengambil logo dari table domains via relasi tenant
+            // Asumsi: Satu tenant bisa punya banyak domain, kita ambil yang pertama (first)
+            $domain = $company->tenant && $company->tenant->domains 
+                ? $company->tenant->domains->first() 
+                : null;
+
+            $logoPath = $domain ? $domain->path_company_logo : null;
+
+            // Generate URL dari path yang ada di table domains
+            $company->logo_url = $logoPath 
+                ? Storage::url($logoPath) 
                 : null;
                 
             return $company;
         });
+
         $users = User::select('id', 'name')->get();
 
         return Inertia::render('company/page', [
@@ -84,7 +95,6 @@ class PerusahaanController extends Controller
             'nama_perusahaan'   => $validated['nama_perusahaan'],
             'notify_1'          => $validated['notify_1'] ?? null,
             'notify_2'          => $validated['notify_2'] ?? null,
-            'path_company_logo' => $logoPath,
         ]);
 
         $rawDomain = $validated['domain'];
@@ -116,6 +126,7 @@ class PerusahaanController extends Controller
         // Buat Domain untuk Tenant tersebut
         $tenant->domains()->create([
             'domain' => $rawDomain,
+            'path_company_logo' => $logoPath,
         ]);
 
         // ========================================
@@ -171,7 +182,8 @@ class PerusahaanController extends Controller
 
         $currentTenant = Tenant::where('perusahaan_id', $perusahaan->id)->first();
     
-        $currentDomainId = $currentTenant ? $currentTenant->domains()->value('id') : null;
+        $currentDomain = $currentTenant ? $currentTenant->domains()->first() : null;
+        $currentDomainId = $currentDomain ? $currentDomain->id : null;
 
         $validated = $request->validate([
             'nama_perusahaan' => 'required|string|max:255',
@@ -198,19 +210,22 @@ class PerusahaanController extends Controller
             'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
 
+        $logoPath = $currentDomain ? $currentDomain->path_company_logo : null;
+
         if ($request->hasFile('company_logo')) {
-            if ($perusahaan->path_company_logo && Storage::disk('public')->exists($perusahaan->path_company_logo)) {
-                Storage::disk('public')->delete($perusahaan->path_company_logo);
+            // Hapus file lama (Cek dari data DOMAIN, bukan Perusahaan)
+            if ($logoPath && Storage::disk('public')->exists($logoPath)) {
+                Storage::disk('public')->delete($logoPath);
             }
 
-            $perusahaan->path_company_logo = $request->file('company_logo')->store('company_logo', 'public');
+            // Upload baru & simpan path ke variabel
+            $logoPath = $request->file('company_logo')->store('company_logo', 'public');
         }
 
         $perusahaan->update([
             'nama_perusahaan'   => $validated['nama_perusahaan'],
             'notify_1'          => $validated['notify_1'] ?? null,
             'notify_2'          => $validated['notify_2'] ?? null,
-            'path_company_logo' => $perusahaan->path_company_logo,
         ]);
 
         $rawDomain = $validated['domain'];
@@ -232,6 +247,7 @@ class PerusahaanController extends Controller
 
         $tenant->domains()->create([
             'domain' => $rawDomain,
+            'path_company_logo' => $logoPath, // Masukkan path logo ke sini
         ]);
 
         $sync = [];
