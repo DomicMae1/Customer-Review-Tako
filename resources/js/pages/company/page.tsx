@@ -27,12 +27,12 @@ interface FormState {
     id_User_3: string;
     notify_1: string;
     notify_2: string;
-    path_company_logo: string;
+    logo_url: string;
 }
 
 export default function ManageCompany() {
     const { props } = usePage();
-    const { companies, flash } = props as {
+    const { companies, flash } = props as unknown as {
         companies: any[];
         flash: { success?: string; error?: string };
         users: any[];
@@ -48,7 +48,7 @@ export default function ManageCompany() {
         id_User_3: '',
         notify_1: '',
         notify_2: '',
-        path_company_logo: '',
+        logo_url: '',
     };
 
     const [form, setForm] = useState<FormState>(initialFormState);
@@ -106,7 +106,7 @@ export default function ManageCompany() {
             id_User_3: lawyer ? String(lawyer.id) : '',
             notify_1: company.notify_1 || '',
             notify_2: company.notify_2 || '',
-            path_company_logo: company.path_company_logo || '',
+            logo_url: company.logo_url || '',
         });
 
         setOpenForm(true);
@@ -279,21 +279,17 @@ export default function ManageCompany() {
                             </div>
                             <div>
                                 <ResettableDropzoneImage
-                                    // Gunakan Key agar komponen mereset diri saat form berubah
                                     key={selectedCompany ? selectedCompany.id : 'new'}
                                     label="Upload Logo Perusahaan"
                                     isRequired={false}
                                     onFileChange={setCompanyLogoFile}
                                     existingFile={
-                                        // Cek apakah ada URL logo di state form
-                                        form.path_company_logo
+                                        form.logo_url
                                             ? {
-                                                  // Ambil nama file dari URL untuk ditampilkan sebagai label
-                                                  nama_file: form.path_company_logo.split('/').pop() ?? 'logo.png',
-                                                  // Path ini SEKARANG sudah berupa URL lengkap dari Controller
-                                                  path: form.path_company_logo,
+                                                  nama_file: form.logo_url.split('/').pop() ?? 'logo.png',
+                                                  path: form.logo_url,
                                               }
-                                            : undefined // Lebih baik undefined daripada null jika prop optional
+                                            : undefined
                                     }
                                 />
                             </div>

@@ -105,7 +105,7 @@ export function ResettableDropzoneImage({
                 key={componentKey}
                 {...getRootProps()}
                 className={cn(
-                    'flex min-h-[150px] cursor-pointer items-center justify-center rounded-md border-2 border-black p-4 text-center transition-colors dark:border-neutral-800',
+                    'flex min-h-37.5 cursor-pointer items-center justify-center rounded-md border-2 border-black p-4 text-center transition-colors dark:border-neutral-800',
                     borderColor,
                 )}
             >
