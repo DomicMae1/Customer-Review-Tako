@@ -100,7 +100,7 @@ export default function ManageCompany() {
 
         setForm({
             nama_perusahaan: company.nama_perusahaan || '',
-            domain: company.tenant?.domains?.[0]?.domain || '',
+            domain: company.logo_url ? new URL(company.logo_url).hostname : company.domain?.domain || '',
             id_User_1: manager ? String(manager.id) : '',
             id_User_2: direktur ? String(direktur.id) : '',
             id_User_3: lawyer ? String(lawyer.id) : '',
@@ -226,7 +226,7 @@ export default function ManageCompany() {
                                 <Input
                                     id="domain"
                                     name="domain"
-                                    value={form.domain}
+                                    value={form.domain} // Pastikan ini terikat ke state
                                     onChange={handleInputChange}
                                     placeholder="Contoh: alpha.registration.tako.co.id"
                                     required

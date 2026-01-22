@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Stancl\Tenancy\Database\Models\Domain;
 
 class Perusahaan extends Model
 {
@@ -16,7 +17,7 @@ class Perusahaan extends Model
 
     protected $fillable = [
         'nama_perusahaan',
-        'domain',
+        'id_domain',
         'notify_1',
         'notify_2',
         'data',
@@ -68,5 +69,10 @@ class Perusahaan extends Model
     public function tenant()
     {
         return $this->hasOne(Tenant::class, 'perusahaan_id');
+    }
+
+    public function domain()
+    {
+        return $this->belongsTo(Domain::class, 'id_domain');
     }
 }

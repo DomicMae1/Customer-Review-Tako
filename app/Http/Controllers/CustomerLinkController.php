@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CustomerLink;
+use App\Models\Perusahaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -79,21 +80,21 @@ class CustomerLinkController extends Controller
             return response()->json(['message' => 'Role pengguna tidak valid.'], 403);
         }
 
-        $tenant = \App\Models\Tenant::where('perusahaan_id', $id_perusahaan)->first();
+        $perusahaan = Perusahaan::with('domain')->find($id_perusahaan);
 
-        if (!$tenant) {
-            return response()->json(['message' => 'Data Tenant belum disetting untuk perusahaan ini.'], 404);
+        if (!$perusahaan) {
+            return response()->json(['message' => 'Perusahaan tidak ditemukan.'], 404);
         }
 
-        $domainRecord = $tenant->domains()->first();
-
-        if (!$domainRecord) {
-            return response()->json(['message' => 'Domain belum disetting untuk tenant ini.'], 404);
+        if (!$perusahaan->domain) {
+            return response()->json(['message' => 'Domain belum disetting (ID Domain null).'], 404);
         }
 
-        $tenantDomain = $domainRecord->domain; 
-        $protocol = $request->secure() ? 'https://' : 'http://';
-        $generatedUrl = "{$protocol}{$tenantDomain}/form/{$token}";
+        $companyDomainString = $perusahaan->domain->domain; // Akses properti 'domain' dari model Domain
+
+        // 3. Generate URL
+        $protocol = app()->isProduction() ? 'https://' : ($request->secure() ? 'https://' : 'http://');
+        $generatedUrl = "{$protocol}{$companyDomainString}/form/{$token}";
 
         $link = CustomerLink::on('tako-perusahaan')->create([
             'id_user' => $user->id,

@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('notify_1')->nullable();
             $table->string('notify_2')->nullable();
             $table->json('data')->nullable();
+            $table->unsignedInteger('id_domain')->nullable()->after('nama_perusahaan');
 
             $table->timestamps();
         });

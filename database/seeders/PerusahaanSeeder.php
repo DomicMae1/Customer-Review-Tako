@@ -18,29 +18,35 @@ class PerusahaanSeeder extends Seeder
             ['nama_perusahaan' => 'CV Delta', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'delta'],
         ];
 
+        $appDomain = env('APP_DOMAIN');
+
         foreach ($perusahaans as $data) {
-            // 1. Buat Data Bisnis (Perusahaan)
+            
+            // 1. Buat Perusahaan
             $perusahaan = Perusahaan::create([
                 'nama_perusahaan' => $data['nama_perusahaan'],
                 'notify_1' => $data['notify_1'],
             ]);
 
-            // 2. Buat Data System (Tenant)
+            // 2. Buat Tenant
             $tenant = Tenant::create([
                 'id' => $data['subdomain'],
                 'perusahaan_id' => $perusahaan->id,
             ]);
 
-            $appDomain = env('APP_DOMAIN'); // 'registration.tako.test'
-
-            // 3. Logic Pembentukan Domain Baru
-            // Kita ubah titik pertama '.' menjadi '.subdomain.'
-            // 'registration.tako.test' -> 'registration.alpha.tako.test'
-            $customDomain = Str::replaceFirst('.', '.' . $data['subdomain'] . '.', $appDomain);
+            // 3. Logic Pembentukan Domain Baru (PERBAIKAN DISINI)
+            // Cukup gabungkan: subdomain + titik + app_domain
+            // Hasil: alpha.customer-review-tako.test
+            $customDomain = $data['subdomain'] . '.' . $appDomain;
 
             // 4. Simpan Domain
-            $tenant->domains()->create([
+            $domainRecord = $tenant->domains()->create([
                 'domain' => $customDomain,
+            ]);
+
+            // 5. Update Perusahaan dengan ID Domain
+            $perusahaan->update([
+                'id_domain' => $domainRecord->id,
             ]);
         }
     }
