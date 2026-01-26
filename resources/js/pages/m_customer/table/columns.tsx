@@ -5,13 +5,13 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import { MasterCustomer } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal } from 'lucide-react';
 import axios from 'axios';
+import { MoreHorizontal } from 'lucide-react';
 
 const downloadPdf = async (id: number) => {
     try {
         // Beri feedback ke user bahwa proses sedang berjalan
-        const confirmDownload = window.confirm("Sedang memproses PDF (ini mungkin memakan waktu beberapa detik). Lanjutkan?");
+        const confirmDownload = window.confirm('Sedang memproses PDF (ini mungkin memakan waktu beberapa detik). Lanjutkan?');
         if (!confirmDownload) return;
 
         const response = await axios.get(`/customer/${id}/pdf`, {
@@ -34,14 +34,13 @@ const downloadPdf = async (id: number) => {
         link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
-        
+
         // Cleanup memori
         link.remove();
         window.URL.revokeObjectURL(url);
-
     } catch (error) {
-        console.error("Download Error:", error);
-        alert("Gagal mengunduh PDF. Silakan coba lagi nanti.");
+        console.error('Download Error:', error);
+        alert('Gagal mengunduh PDF. Silakan coba lagi nanti.');
     }
 };
 

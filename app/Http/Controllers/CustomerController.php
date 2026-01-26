@@ -34,37 +34,33 @@ class CustomerController extends Controller
             throw UnauthorizedException::forPermissions(['view-master-customer']);
         }
 
+        // --- Cek user tanpa perusahaan ---
         if ($user->hasRole(['user', 'manager', 'direktur']) && empty($user->id_perusahaan)) {
             return Inertia::render('m_customer/page', [
-                'customers' => [], // Kirim data kosong
+                'customers' => [],
                 'company' => null,
-                'flash' => [
-                    'success' => null,
-                    'error' => 'Anda belum masuk di perusahaan manapun.', // Pesan Error
-                ],
+                'flash' => ['success' => null, 'error' => 'Anda belum masuk di perusahaan manapun.'],
             ]);
         }
 
+        // --- 1. Setup Query Dasar ---
         $query = Customer::with([
-            'creator',
-            'perusahaan',
-            'status',
-            'status.submit1By',
-            'status.status1Approver',
-            'status.status2Approver',
-            'status.status3Approver',
+            'creator', 'perusahaan', 'status',
+            'status.submit1By', 'status.status1Approver',
+            'status.status2Approver', 'status.status3Approver',
             'customer_links'
         ]);
 
+        // --- 2. Filter Scope Perusahaan ---
         if ($user->hasRole('user')) {
             if ($user->id_perusahaan) {
                 $query->where('id_perusahaan', $user->id_perusahaan)
-                    ->where('id_user', $user->id);
+                      ->where('id_user', $user->id);
             } else {
                 $query->whereRaw('1 = 0');
             }
-        } elseif ($user->hasRole(['manager', 'direktur', 'lawyer'])) {
-            $isLawyerGlobal = $user->hasRole('lawyer') && empty($user->id_perusahaan);
+        } elseif ($user->hasRole(['manager', 'direktur', 'lawyer', 'auditor'])) {
+            $isLawyerGlobal = ($user->hasRole(['lawyer', 'auditor', 'direktur']) && empty($user->id_perusahaan));
             if (!$isLawyerGlobal) {
                 $perusahaanIds = DB::connection('tako-perusahaan')
                     ->table('perusahaan_user_roles')
@@ -75,14 +71,100 @@ class CustomerController extends Controller
                 if (!empty($perusahaanIds)) {
                     $query->whereIn('id_perusahaan', $perusahaanIds);
                 } else {
-                    // Jika tidak punya akses ke perusahaan manapun, jangan tampilkan data
                     $query->whereRaw('1 = 0');
                 }
             }
         }
 
-        $suppliers = $query->get();
+        // =====================================================================
+        // 3. LOGIC WORKFLOW (History Mode + Strict Hierarchy)
+        // =====================================================================
+        
+        $statusTable = 'customers_statuses'; 
 
+        // --- A. ROLE USER (MARKETING) ---
+        // Lihat semua history buatan sendiri.
+        if ($user->hasRole('user')) {
+            // Logic sudah tercover di filter scope perusahaan (where id_user)
+        }
+
+        // --- B. ROLE MANAGER ---
+        // Lihat Inbox (Kiriman User) + Buatan Sendiri.
+        // TAPI: Tidak boleh lihat data buatan Direktur.
+        elseif ($user->hasRole('manager')) {
+            
+            // Inbox: Data yang sudah disubmit
+            $submittedIds = DB::connection('tako-perusahaan')
+                ->table($statusTable)
+                ->whereNotNull('submit_1_timestamps')
+                ->pluck('id_Customer')
+                ->toArray();
+
+            // Blokir data buatan Direktur
+            $bossIds = User::role('direktur')->pluck('id')->toArray(); 
+
+            $query->where(function($q) use ($submittedIds, $user, $bossIds) {
+                // 1. Inbox (Kecuali punya bos)
+                $q->where(function($sub) use ($submittedIds, $bossIds) {
+                    $sub->whereIn('id', $submittedIds)
+                        ->whereNotIn('id_user', $bossIds);
+                })
+                // 2. Buatan Sendiri
+                ->orWhere('id_user', $user->id);
+            });
+        }
+
+        // --- C. ROLE DIREKTUR / LAWYER / AUDITOR ---
+        // Lihat Data Matang (Sudah Verif Manager) + Buatan Sendiri.
+        elseif ($user->hasRole(['direktur', 'lawyer', 'auditor'])) { 
+            
+            // Step 1: Cari ID Perusahaan yang MEMILIKI Manager aktif
+            $companiesWithManager = User::role('manager')
+                ->whereNotNull('id_perusahaan')
+                ->pluck('id_perusahaan')
+                ->unique()
+                ->toArray();
+
+            // Step 2: Ambil ID Customer berdasarkan status
+            
+            // A. Data Verified (Sudah diapprove Manager)
+            $verifiedByManagerIds = DB::connection('tako-perusahaan')
+                ->table($statusTable)
+                ->whereNotNull('status_1_timestamps')
+                ->pluck('id_Customer')
+                ->toArray();
+
+            // B. Data Submitted (Baru disubmit User/Marketing)
+            $submittedByUserIds = DB::connection('tako-perusahaan')
+                ->table($statusTable)
+                ->whereNotNull('submit_1_timestamps')
+                ->pluck('id_Customer')
+                ->toArray();
+
+            // Step 3: Gabungkan Filter
+            $query->where(function($q) use ($verifiedByManagerIds, $submittedByUserIds, $companiesWithManager, $user) {
+                
+                // 1. Buatan Sendiri (Selalu muncul)
+                $q->where('id_user', $user->id)
+
+                // 2. Flow Normal (Ada Manager): Tampilkan jika sudah diapprove Manager
+                // (Berlaku untuk semua perusahaan, baik punya manager atau tidak, jika sudah status_1 pasti aman)
+                  ->orWhereIn('id', $verifiedByManagerIds)
+
+                // 3. Flow Bypass (Tidak Ada Manager): Tampilkan jika sudah disubmit User
+                // SYARAT: ID Perusahaan dari data tersebut TIDAK ADA dalam list $companiesWithManager
+                  ->orWhere(function($subQ) use ($submittedByUserIds, $companiesWithManager) {
+                      $subQ->whereIn('id', $submittedByUserIds)
+                           ->whereNotIn('id_perusahaan', $companiesWithManager);
+                  });
+            });
+        }
+
+        // =====================================================================
+
+        $suppliers = $query->orderBy('created_at', 'desc')->get();
+
+        // --- 4. MAPPING DATA (PERBAIKAN UNTUK FRONTEND) ---
         $customerData = $suppliers->map(function ($customer) {
             $status = $customer->status;
             $tanggal = null;
@@ -115,6 +197,9 @@ class CustomerController extends Controller
                 $userName = $customer->creator?->name ?? '-';
             }
 
+            // Fix Invalid Date: Pastikan tanggal dikirim sebagai string ISO
+            $formattedDate = $tanggal ? \Carbon\Carbon::parse($tanggal)->toIso8601String() : null;
+
             return [
                 'id' => $customer->id,
                 'nama_perusahaan' => $customer->perusahaan?->nama_perusahaan ?? '-',
@@ -122,23 +207,34 @@ class CustomerController extends Controller
                 'tanggal_status' => $tanggal,
                 'status_label' => $label,
                 'status' => $status?->status_3 ?? '-',
-                'note' => $note,
+                
+                // 6. Tanggal Status (Untuk memperbaiki "Invalid Date")
+                // Frontend membaca ini untuk menampilkan "disubmit pada [TANGGAL]"
+                'tanggal_status' => $formattedDate, 
+                'created_at' => $customer->created_at, // Fallback
+
+                // 7. Status Review (Approved/Rejected)                'status' => $status?->status_3 ?? '-',
                 'nama_user' => $userName,
                 'creator_name' => $customer->creator?->name ?? '-',
                 'no_telp_personal' => $customer->no_telp_personal,
+                'note' => $note,
+
+                // Data Pelengkap Lainnya
+                'user_id' => $customer->user_id,
                 'creator' => [
                     'name' => $customer->creator?->name,
                     'role' => $customer->creator?->roles?->first()?->name,
                 ],
-                'submit_1_timestamps' => $status?->submit_1_timestamps,
-                'status_2_timestamps' => $status?->status_2_timestamps,
                 'customer_link' => [
                     'url' => $customer->customer_links?->url,
                 ],
-                'user_id' => $customer->user_id,
+                
+                // Data timestamp spesifik (untuk filter di frontend)
+                'submit_1_timestamps' => $status?->submit_1_timestamps,
+                'status_1_timestamps' => $status?->status_1_timestamps,
+                'status_2_timestamps' => $status?->status_2_timestamps,
             ];
         });
-
 
         return Inertia::render('m_customer/page', [
             'customers' => $customerData,
