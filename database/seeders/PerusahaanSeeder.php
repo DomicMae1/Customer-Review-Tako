@@ -13,9 +13,6 @@ class PerusahaanSeeder extends Seeder
     {
         $perusahaans = [
             ['nama_perusahaan' => 'PT Alpha', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'alpha'],
-            ['nama_perusahaan' => 'PT Beta', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'beta'],
-            ['nama_perusahaan' => 'UD Cherry', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'cherry'],
-            ['nama_perusahaan' => 'CV Delta', 'notify_1' => 'ardonyunors147@gmail.com', 'subdomain' => 'delta'],
         ];
 
         $appDomain = env('APP_DOMAIN');
