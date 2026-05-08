@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::connection('tako-perusahaan')->create('perusahaan', function (Blueprint $table) {
             $table->id();
+            $table->string('uid')->unique();
             $table->string('nama_perusahaan');
             $table->string('notify_1')->nullable();
             $table->string('notify_2')->nullable();

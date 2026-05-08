@@ -385,8 +385,29 @@ export default function CustomerForm({
             return;
         }
 
+        const npwpOnlyNumber = data.no_npwp.replace(/\D/g, '');
+
+        if (npwpOnlyNumber.length < 15) {
+            const message = 'Nomer NPWP belum lengkap';
+            setErrors((prev) => ({ ...prev, no_npwp: message }));
+            alert(message);
+            setIsLoading(false);
+            return;
+        }
+
         if (!data.no_npwp_16 || !data.no_npwp_16.trim()) {
             const message = 'Nomer NPWP 16 wajib diisi';
+            setErrors((prev) => ({ ...prev, no_npwp_16: message }));
+            alert(message);
+            setIsLoading(false);
+            return;
+        }
+
+        // Validasi panjang NPWP 16 digit
+        const npwp16OnlyNumber = data.no_npwp_16.replace(/\D/g, '');
+
+        if (npwp16OnlyNumber.length < 16) {
+            const message = 'Nomer NPWP 16 belum lengkap';
             setErrors((prev) => ({ ...prev, no_npwp_16: message }));
             alert(message);
             setIsLoading(false);

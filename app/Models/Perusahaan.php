@@ -16,6 +16,7 @@ class Perusahaan extends Model
     protected $table = 'perusahaan';
 
     protected $fillable = [
+        'uid',
         'nama_perusahaan',
         'id_domain',
         'notify_1',
@@ -30,6 +31,27 @@ class Perusahaan extends Model
     protected $casts = [
         'data' => 'json',
     ];
+
+    /**
+     * Auto Generate UID
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($perusahaan) {
+
+            do {
+                $randomNumber = mt_rand(100000, 999999);
+                $uid = 'TK-' . $randomNumber;
+
+            } while (
+                self::where('uid', $uid)->exists()
+            );
+
+            $perusahaan->uid = $uid;
+        });
+    }
 
     public function user1()
     {
