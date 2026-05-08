@@ -237,6 +237,8 @@ export default function CustomerForm({
 
         setIsLoading(true);
 
+        const isCustomerPerorangan = data.bentuk_badan_usaha === 'Customer Perorangan';
+
         if (!customer?.id) {
             try {
                 const res = await axios.post(route('customer.check-npwp'), {
@@ -495,7 +497,7 @@ export default function CustomerForm({
             setIsLoading(false);
             return;
         }
-        if (!finalNib) {
+        if (!isCustomerPerorangan && !finalNib) {
             alert('Dokumen NIB wajib diunggah.');
             setIsLoading(false);
             return;
@@ -506,7 +508,7 @@ export default function CustomerForm({
             return;
         }
 
-        const rawAttachments = [finalNpwp, finalNib, finalSppkp, finalKtp].filter(Boolean) as Attachment[];
+        const rawAttachments = [finalNpwp, isCustomerPerorangan ? null : finalNib, finalSppkp, finalKtp].filter(Boolean) as Attachment[];
         const processedAttachments: any[] = [];
 
         try {
@@ -700,12 +702,19 @@ export default function CustomerForm({
                                     <SelectValue placeholder="Pilih Bentuk Badan Usaha" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="pma">Penanaman Modal Asing (PMA)</SelectItem>
-                                    <SelectItem value="pmdn">Penanaman Modal Dalam Negeri (PMDN)</SelectItem>
-                                    <SelectItem value="pt">Perseroan Terbatas (PT)</SelectItem>
-                                    <SelectItem value="cv">Commanditaire Vennootschap (CV)</SelectItem>
-                                    <SelectItem value="ud">Usaha Dagang (UD)</SelectItem>
-                                    <SelectItem value="po">Perusahaan Perorangan (PO)</SelectItem>
+                                    <SelectItem value="Penanaman Modal Asing">Penanaman Modal Asing (PMA)</SelectItem>
+
+                                    <SelectItem value="Penanaman Modal Dalam Negeri">Penanaman Modal Dalam Negeri (PMDN)</SelectItem>
+
+                                    <SelectItem value="Perseroan Terbatas">Perseroan Terbatas (PT)</SelectItem>
+
+                                    <SelectItem value="Commanditaire Vennootschap">Commanditaire Vennootschap (CV)</SelectItem>
+
+                                    <SelectItem value="Usaha Dagang">Usaha Dagang (UD)</SelectItem>
+
+                                    <SelectItem value="Perusahaan Perseorangan">Perusahaan Perseorangan (PO)</SelectItem>
+
+                                    <SelectItem value="Customer Perorangan">Customer Perorangan (CP)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -857,8 +866,8 @@ export default function CustomerForm({
                             />
                         </div>
                     </div>
-                    <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <h1 className="mb-2 text-xl font-semibold">Data Direktur</h1>
+                    <div className="col-span-3 mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h1 className="text-xl font-semibold">Data Direktur</h1>
                         <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div className="w-full">
                                 <Label htmlFor="nama_pj">
@@ -907,8 +916,8 @@ export default function CustomerForm({
                             </div>
                         </div>
                     </div>
-                    <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <h1 className="mb-2 text-xl font-semibold">Data Personal</h1>
+                    <div className="col-span-3 mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h1 className="text-xl font-semibold">Data Personal</h1>
                         <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div className="w-full">
                                 <Label htmlFor="nama_personal">
@@ -996,7 +1005,7 @@ export default function CustomerForm({
                             <div className="w-full">
                                 <ResettableDropzone
                                     label="Upload NIB"
-                                    isRequired={true}
+                                    isRequired={data.bentuk_badan_usaha !== 'Customer Perorangan'}
                                     uploadConfig={{
                                         url: '/customer/upload-temp',
                                         payload: {
@@ -1009,7 +1018,9 @@ export default function CustomerForm({
                                     onFileChange={(file, response) => handleUploadSuccess('nib', file, response)}
                                     existingFile={nibAttachment || customer?.attachments?.find((a) => a.type === 'nib')}
                                 />
-                                <p className="mt-1 text-xs text-red-500">* Wajib unggah NIB dalam format PDF</p>
+                                <p className="mt-1 text-xs text-red-500">
+                                    {data.bentuk_badan_usaha === 'Customer Perorangan' ? '' : '* Wajib unggah NIB dalam format PDF'}
+                                </p>
                             </div>
 
                             {/* SPPKP Upload */}
