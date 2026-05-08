@@ -48,12 +48,15 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const [statusFilter, setStatusFilter] = useState<'sudah' | 'belum' | ''>('');
 
     const [filterColumn, setFilterColumn] = useState<'nama_customer' | 'creator_name' | 'nama_perusahaan' | 'keterangan_status' | 'status'>(
-        'nama_customer',
+        'creator_name',
     );
 
     const [filterValue, setFilterValue] = useState('');
     const isKeteranganStatus = filterColumn === 'keterangan_status';
     const isStatusReview = filterColumn === 'status';
+    const isCreatorName = filterColumn === 'creator_name';
+
+    const creatorNames = Array.from(new Set(data.map((item: any) => item.creator_name).filter(Boolean)));
     const [selectedPerusahaanId, setSelectedPerusahaanId] = useState<string>('');
 
     const table = useReactTable({
@@ -103,7 +106,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         table.resetSorting();
         setSorting([{ id: 'keterangan_status', desc: true }]);
         setHasUserSorted(false);
-        setFilterColumn('nama_customer');
+        setFilterColumn('creator_name');
     };
 
     const handleSubmitName = async () => {
@@ -185,6 +188,20 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                             <SelectContent>
                                 <SelectItem value="approved">Aman</SelectItem>
                                 <SelectItem value="rejected">Bermasalah</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    ) : isCreatorName ? (
+                        <Select value={filterValue} onValueChange={(val) => setFilterValue(val)}>
+                            <SelectTrigger className="w-[250px]">
+                                <SelectValue placeholder="Pilih Creator" />
+                            </SelectTrigger>
+
+                            <SelectContent>
+                                {creatorNames.map((name) => (
+                                    <SelectItem key={name} value={name}>
+                                        {name}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     ) : (
