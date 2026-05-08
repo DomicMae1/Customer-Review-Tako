@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\CustomerAttach;
 use App\Models\Customers_Status;
 use App\Models\Perusahaan;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -118,6 +119,9 @@ class CustomersStatusController extends Controller
         if (!$status) return back()->with('error', 'Data status customer tidak ditemukan.');
 
         $customer = $status->customer;
+
+        $firstCustomerId = \App\Models\Customer::min('id');  
+        $isFirstCustomer = $customer->id == $firstCustomerId;
 
         // 1. Ambil Info Perusahaan untuk Folder Name
         $idPerusahaan = $request->input('id_perusahaan');
@@ -411,6 +415,25 @@ class CustomersStatusController extends Controller
         }
 
         $status->save();
+
+        if ($isFirstCustomer) {
+            try {
+                $auditorEmails = User::role('auditor')
+                    ->whereNotNull('email')
+                    ->pluck('email')
+                    ->map(fn($email) => trim($email))
+                    ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+                    ->unique()
+                    ->values()
+                    ->toArray();
+
+                if (!empty($auditorEmails)) {
+                    Mail::to($auditorEmails)->send(new \App\Mail\NewCustomerAuditorMail($customer, $status, $user));
+                }
+            } catch (\Exception $e) {
+                Log::error('Gagal kirim email customer baru ke auditor: ' . $e->getMessage());
+            }
+        }
 
         return back()->with('success', 'Data berhasil disubmit.');
     }

@@ -39,7 +39,7 @@ interface Perusahaan {
 export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
     const { roles, companies } = usePage().props as unknown as {
         // const { roles, auth } = usePage().props as unknown as {
-        roles: Role[]; 
+        roles: Role[];
         companies: Perusahaan[];
     };
 
@@ -53,9 +53,35 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
     const [passwordConfirmation, setPasswordConfirmation] = React.useState('');
-    const [selectedRole, setSelectedRole] = React.useState<string>(''); 
+    const [selectedRole, setSelectedRole] = React.useState<string>('');
     const [selectedCompany, setSelectedCompany] = React.useState<string>('');
     const selectedRoleName = roles.find((role) => String(role.id) === selectedRole)?.name;
+
+    const [openImportCsv, setOpenImportCsv] = React.useState(false);
+    const [csvFile, setCsvFile] = React.useState<File | null>(null);
+
+    const onSubmitImportCsv = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!csvFile) {
+            console.error('File CSV harus dipilih.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('csv_file', csvFile);
+
+        router.post('/users/import-csv', formData, {
+            forceFormData: true,
+            onSuccess: () => {
+                setOpenImportCsv(false);
+                setCsvFile(null);
+            },
+            onError: (errors) => {
+                console.error('❌ Error saat import CSV:', errors);
+            },
+        });
+    };
 
     const [filterValue, setFilterValue] = React.useState('');
 
@@ -140,6 +166,9 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                 </div>
 
                 <DataTableViewOptions table={table} />
+                <Button className="h-9" variant="outline" onClick={() => setOpenImportCsv(true)}>
+                    Import from CSV
+                </Button>
                 <Button className="h-9" onClick={() => setOpenCreate(true)}>
                     Add User
                 </Button>
@@ -180,6 +209,39 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                 </Table>
             </div>
             <DataTablePagination table={table} />
+
+            <Dialog
+                open={openImportCsv}
+                onOpenChange={(open) => {
+                    setOpenImportCsv(open);
+                    if (!open) {
+                        setCsvFile(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Import from CSV</DialogTitle>
+                        <DialogDescription>Upload file CSV untuk menambahkan user secara massal.</DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={onSubmitImportCsv} className="space-y-4">
+                        <div>
+                            <Label htmlFor="csv_file">CSV File</Label>
+                            <Input id="csv_file" type="file" accept=".csv,text/csv" onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)} />
+                        </div>
+
+                        <DialogFooter className="mt-8 sm:justify-start">
+                            <Button type="submit">Import</Button>
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary">
+                                    Cancel
+                                </Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 open={openCreate}

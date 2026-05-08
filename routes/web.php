@@ -43,6 +43,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/perusahaan/{id}/has-manager', [PerusahaanController::class, 'checkManagerExistence']);
 
     Route::resource('users', UserController::class);
+    Route::post('/users/import-csv', [UserController::class, 'importCsv']);
+    
     Route::resource('role-manager', RoleController::class);
     Route::resource('perusahaan', PerusahaanController::class);
 });

@@ -10,10 +10,12 @@ use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
+use Laravel\Sanctum\HasApiTokens;
+
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     protected $connection = 'tako-perusahaan';
 
@@ -25,6 +27,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'NIK',
+        'uid',
         'email',
         'password',
         'id_perusahaan',

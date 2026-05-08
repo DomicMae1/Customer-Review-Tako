@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::connection('tako-perusahaan')->create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->string('uid')->nullable()->unique()->after('name');
             $table->string('NIK')->nullable();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();

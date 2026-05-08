@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/auth-layout';
 
 interface LoginForm {
-    email: string;
+    login_type: 'email' | 'uid';
+    login: string;
     password: string;
     remember: boolean;
 }
@@ -27,7 +28,8 @@ interface LoginProps {
 
 export default function Login({ status, canResetPassword, company }: LoginProps) {
     const { data, setData, post, processing, errors, reset } = useForm<LoginForm>({
-        email: '',
+        login_type: 'email',
+        login: '',
         password: '',
         remember: false,
     });
@@ -54,22 +56,46 @@ export default function Login({ status, canResetPassword, company }: LoginProps)
 
             <form className="flex flex-col gap-6" onSubmit={submit}>
                 <div className="grid gap-6">
-                    <div className="grid gap-2">
-                        <Label className="flex" htmlFor="email">
-                            Email address
-                        </Label>
+                    <div className="-mt-2 grid gap-2 text-left">
+                        <Label className="text-foreground block w-full text-left text-sm font-semibold">Login Method</Label>
+
+                        <div className="flex w-full gap-2">
+                            <Button
+                                type="button"
+                                variant={data.login_type === 'email' ? 'default' : 'outline'}
+                                className="h-10 w-1/2 font-bold"
+                                onClick={() => setData('login_type', 'email')}
+                            >
+                                Email
+                            </Button>
+
+                            <Button
+                                type="button"
+                                variant={data.login_type === 'uid' ? 'default' : 'outline'}
+                                className="h-10 w-1/2 font-bold"
+                                onClick={() => setData('login_type', 'uid')}
+                            >
+                                UID
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-2 text-left">
+                        <Label htmlFor="login">{data.login_type === 'email' ? 'Email' : 'UID'}</Label>
+
                         <Input
-                            id="email"
-                            type="email"
+                            id="login"
+                            type={data.login_type === 'email' ? 'email' : 'text'}
                             required
                             autoFocus
-                            tabIndex={1}
-                            autoComplete="email"
-                            value={data.email}
-                            onChange={(e) => setData('email', e.target.value)}
-                            placeholder="email@example.com"
+                            tabIndex={2}
+                            autoComplete={data.login_type === 'email' ? 'email' : 'username'}
+                            value={data.login}
+                            onChange={(e) => setData('login', e.target.value)}
+                            placeholder={data.login_type === 'email' ? 'email@example.com' : 'Masukkan UID'}
                         />
-                        <InputError message={errors.email} />
+
+                        <InputError message={errors.login} />
                     </div>
 
                     <div className="grid gap-2">
