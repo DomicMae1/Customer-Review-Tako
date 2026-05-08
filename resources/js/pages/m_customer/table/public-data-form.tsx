@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { ResettableDropzone } from '@/components/ResettableDropzone';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -125,6 +126,8 @@ export default function PublicCustomerForm({
     const [sppkpFile, setSppkpFile] = useState<UploadedFileState | null>(null);
     const [ktpFile, setKtpFile] = useState<UploadedFileState | null>(null);
     // const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+    const [pendingPayload, setPendingPayload] = useState<any>(null);
 
     const handleUploadSuccess = (type: string, file: File | null, response: any) => {
         if (file && response) {
@@ -193,12 +196,38 @@ export default function PublicCustomerForm({
         };
     }
 
+    const submitFinalData = async () => {
+        if (!pendingPayload) return;
+
+        setIsConfirmDialogOpen(false);
+        setIsLoading(true);
+
+        try {
+            const res = await axios.post(route('customer.public.submit'), pendingPayload);
+            window.alert(`✅ ${res.data.message}`);
+            setIsLoading(false);
+            window.location.reload();
+        } catch (error: any) {
+            console.error('Submit Error:', error);
+            const msg = error.response?.data?.error || 'Terjadi kesalahan saat menyimpan data.';
+            alert(`❌ ${msg}`);
+            setIsLoading(false);
+        }
+    };
+
     const handleSubmit: FormEventHandler = async (e) => {
         e.preventDefault();
 
         const newErrors: typeof errors_kategori = {};
 
         setIsLoading(true);
+        if (pendingPayload) {
+            setIsConfirmDialogOpen(true);
+            setIsLoading(false);
+            return;
+        }
+
+        const isCustomerPerorangan = data.bentuk_badan_usaha === 'Customer Perorangan';
 
         if (!data.kategori_usaha) {
             const message = 'Kategori usaha wajib dipilih';
@@ -296,8 +325,28 @@ export default function PublicCustomerForm({
             return;
         }
 
+        const npwpOnlyNumber = data.no_npwp.replace(/\D/g, '');
+
+        if (npwpOnlyNumber.length < 15) {
+            const message = 'Nomer NPWP belum lengkap';
+            setErrors((prev) => ({ ...prev, no_npwp: message }));
+            alert(message);
+            setIsLoading(false);
+            return;
+        }
+
         if (!data.no_npwp_16 || !data.no_npwp_16.trim()) {
             const message = 'Nomer NPWP 16 wajib diisi';
+            setErrors((prev) => ({ ...prev, no_npwp_16: message }));
+            alert(message);
+            setIsLoading(false);
+            return;
+        }
+
+        const npwp16OnlyNumber = data.no_npwp_16.replace(/\D/g, '');
+
+        if (npwp16OnlyNumber.length < 16) {
+            const message = 'Nomer NPWP 16 belum lengkap';
             setErrors((prev) => ({ ...prev, no_npwp_16: message }));
             alert(message);
             setIsLoading(false);
@@ -375,7 +424,7 @@ export default function PublicCustomerForm({
             setIsLoading(false);
             return;
         }
-        if (!getFileStatus(nibFile, 'nib')) {
+        if (!isCustomerPerorangan && !getFileStatus(nibFile, 'nib')) {
             alert('Dokumen NIB wajib diunggah.');
             setIsLoading(false);
             return;
@@ -402,7 +451,7 @@ export default function PublicCustomerForm({
 
         const rawAttachments = [
             prepareAttachment(npwpFile, 'npwp'),
-            prepareAttachment(nibFile, 'nib'),
+            isCustomerPerorangan ? null : prepareAttachment(nibFile, 'nib'),
             prepareAttachment(sppkpFile, 'sppkp'),
             prepareAttachment(ktpFile, 'ktp'),
         ].filter(Boolean) as any[];
@@ -444,6 +493,7 @@ export default function PublicCustomerForm({
             console.error('Upload gagal:', err);
             alert('Gagal upload file. Silakan coba lagi.');
             setIsLoading(false);
+            return;
         }
 
         const finalPayload = {
@@ -451,17 +501,9 @@ export default function PublicCustomerForm({
             attachments: processedAttachments, // Kirim array attachment yang sudah final
         };
 
-        try {
-            const res = await axios.post(route('customer.public.submit'), finalPayload);
-            window.alert(`✅ ${res.data.message}`);
-            setIsLoading(false);
-            window.location.reload(); // Atau redirect ke halaman sukses
-        } catch (error: any) {
-            console.error('Submit Error:', error);
-            const msg = error.response?.data?.error || 'Terjadi kesalahan saat menyimpan data.';
-            alert(`❌ ${msg}`);
-            setIsLoading(false);
-        }
+        setPendingPayload(finalPayload);
+        setIsConfirmDialogOpen(true);
+        setIsLoading(false);
     };
 
     return (
@@ -567,12 +609,19 @@ export default function PublicCustomerForm({
                                             <SelectValue placeholder="Pilih Bentuk Badan Usaha" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="pma">Penanaman Modal Asing (PMA)</SelectItem>
-                                            <SelectItem value="pmdn">Penanaman Modal Dalam Negeri (PMDN)</SelectItem>
-                                            <SelectItem value="pt">Perseroan Terbatas (PT)</SelectItem>
-                                            <SelectItem value="cv">Commanditaire Vennootschap (CV)</SelectItem>
-                                            <SelectItem value="ud">Usaha Dagang (UD)</SelectItem>
-                                            <SelectItem value="po">Perusahaan Perorangan (PO)</SelectItem>
+                                            <SelectItem value="Penanaman Modal Asing">Penanaman Modal Asing (PMA)</SelectItem>
+
+                                            <SelectItem value="Penanaman Modal Dalam Negeri">Penanaman Modal Dalam Negeri (PMDN)</SelectItem>
+
+                                            <SelectItem value="Perseroan Terbatas">Perseroan Terbatas (PT)</SelectItem>
+
+                                            <SelectItem value="Commanditaire Vennootschap">Commanditaire Vennootschap (CV)</SelectItem>
+
+                                            <SelectItem value="Usaha Dagang">Usaha Dagang (UD)</SelectItem>
+
+                                            <SelectItem value="Perusahaan Perseorangan">Perusahaan Perseorangan (PO)</SelectItem>
+
+                                            <SelectItem value="Customer Perorangan">Customer Perorangan (CP)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -726,8 +775,8 @@ export default function PublicCustomerForm({
                                     />
                                 </div>
                             </div>
-                            <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                <h1 className="mb-2 text-xl font-semibold">Data Direktur</h1>
+                            <div className="col-span-3 mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                <h1 className="text-xl font-semibold">Data Direktur</h1>
                                 <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                                     <div className="w-full">
                                         <Label htmlFor="nama_pj">
@@ -737,7 +786,7 @@ export default function PublicCustomerForm({
                                             id="nama_pj"
                                             value={data.nama_pj}
                                             onChange={(e) => setData('nama_pj', e.target.value)}
-                                            placeholder="Masukkan Terms of Payment"
+                                            placeholder="Masukkan Nama"
                                         />
                                     </div>
                                     <div className="w-full">
@@ -777,8 +826,8 @@ export default function PublicCustomerForm({
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                <h1 className="mb-2 text-xl font-semibold">Data Personal</h1>
+                            <div className="col-span-3 mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                <h1 className="text-xl font-semibold">Data Personal</h1>
                                 <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                                     <div className="w-full">
                                         <Label htmlFor="nama_personal">
@@ -859,7 +908,7 @@ export default function PublicCustomerForm({
                                     <div className="w-full">
                                         <ResettableDropzone
                                             label="Upload NIB"
-                                            isRequired={true}
+                                            isRequired={data.bentuk_badan_usaha !== 'Customer Perorangan'}
                                             uploadConfig={{
                                                 url: '/customer/upload-temp',
                                                 payload: {
@@ -872,7 +921,9 @@ export default function PublicCustomerForm({
                                             onFileChange={(file, response) => handleUploadSuccess('nib', file, response)}
                                             existingFile={customer?.attachments?.find((a) => a.type === 'nib')}
                                         />
-                                        <p className="mt-1 text-xs text-red-500">* Wajib unggah NIB dalam format PDF</p>
+                                        <p className="mt-1 text-xs text-red-500">
+                                            {data.bentuk_badan_usaha === 'Customer Perorangan' ? '' : '* Wajib unggah NIB dalam format PDF'}
+                                        </p>
                                     </div>
 
                                     {/* SPTKP */}
@@ -948,6 +999,111 @@ export default function PublicCustomerForm({
                     </form>
                 </div>
             </div>
+
+            <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Konfirmasi Data Customer</DialogTitle>
+                        <DialogDescription>
+                            Pastikan semua data yang Anda isi sudah benar. Jika masih ada data yang salah, silakan kembali dan perbaiki terlebih
+                            dahulu.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="max-h-[60vh] space-y-4 overflow-y-auto rounded-md border p-4 text-sm">
+                        <div>
+                            <h3 className="mb-2 font-semibold">Data Perusahaan</h3>
+                            <div className="space-y-1">
+                                <p>
+                                    <strong>Kategori Usaha:</strong> {data.kategori_usaha}
+                                </p>
+                                <p>
+                                    <strong>Nama Perusahaan:</strong> {data.nama_perusahaan}
+                                </p>
+                                <p>
+                                    <strong>Bentuk Badan Usaha:</strong> {data.bentuk_badan_usaha}
+                                </p>
+                                <p>
+                                    <strong>Alamat Lengkap:</strong> {data.alamat_lengkap}
+                                </p>
+                                <p>
+                                    <strong>Kota:</strong> {data.kota}
+                                </p>
+                                <p>
+                                    <strong>No Telp Perusahaan:</strong> {data.no_telp}
+                                </p>
+                                <p>
+                                    <strong>No Fax:</strong> {data.no_fax || '-'}
+                                </p>
+                                <p>
+                                    <strong>Alamat Penagihan:</strong> {data.alamat_penagihan}
+                                </p>
+                                <p>
+                                    <strong>Email Perusahaan:</strong> {data.email}
+                                </p>
+                                <p>
+                                    <strong>Website:</strong> {data.website || '-'}
+                                </p>
+                                <p>
+                                    <strong>Terms of Payment:</strong> {data.top}
+                                </p>
+                                <p>
+                                    <strong>Status Perpajakan:</strong> {data.status_perpajakan}
+                                </p>
+                                <p>
+                                    <strong>No NPWP:</strong> {data.no_npwp}
+                                </p>
+                                <p>
+                                    <strong>No NPWP 16:</strong> {data.no_npwp_16}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="mt-3 mb-2 font-semibold">Data Direktur</h3>
+                            <div className="space-y-1">
+                                <p>
+                                    <strong>Nama Direktur:</strong> {data.nama_pj}
+                                </p>
+                                <p>
+                                    <strong>NIK Direktur:</strong> {data.no_ktp_pj}
+                                </p>
+                                <p>
+                                    <strong>No Telp Direktur:</strong> {data.no_telp_pj}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="mt-3 mb-2 font-semibold">Data Personal</h3>
+                            <div className="space-y-1">
+                                <p>
+                                    <strong>Nama Personal:</strong> {data.nama_personal}
+                                </p>
+                                <p>
+                                    <strong>Jabatan Personal:</strong> {data.jabatan_personal}
+                                </p>
+                                <p>
+                                    <strong>No Telp Personal:</strong> {data.no_telp_personal}
+                                </p>
+                                <p>
+                                    <strong>Email Personal:</strong> {data.email_personal}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsConfirmDialogOpen(false)}>
+                            Kembali
+                        </Button>
+
+                        <Button type="button" onClick={submitFinalData} disabled={isLoading || processing}>
+                            Saya Setuju
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

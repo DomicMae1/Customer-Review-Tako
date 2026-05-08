@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ResettableDropzone } from '@/components/ResettableDropzone';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +30,8 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
     const [managerExists, setManagerExists] = useState<boolean>(false);
     const [managerChecked, setManagerChecked] = useState<boolean>(false);
     const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
+    const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
+    const [pendingDecision, setPendingDecision] = useState<'approved' | 'rejected' | null>(null);
 
     const { props } = usePage<{
         attachments: Attachment[];
@@ -123,6 +126,11 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
         !statusData?.status_3_timestamps;
 
     const canEdit = !statusData?.submit_1_timestamps && (isCreator || (creatorRole && userRole && creatorRole === userRole));
+
+    const openSubmitConfirmation = (decision: 'approved' | 'rejected' | null = null) => {
+        setPendingDecision(decision);
+        setIsSubmitConfirmOpen(true);
+    };
 
     const handleSubmit = async (decision: 'approved' | 'rejected' | null = null) => {
         if (!customer.id) {
@@ -765,7 +773,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
             <div className="mt-6 mb-6 flex flex-wrap gap-2 space-x-3">
                 {(showUserSubmit || showAnotherUserSubmit) && (
-                    <Button variant="default" className="" onClick={() => handleSubmit()} disabled={isLoading}>
+                    <Button variant="default" className="" onClick={() => openSubmitConfirmation()} disabled={isLoading}>
                         {isLoading ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1212,6 +1220,38 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                     </div>
                 </div>
             </div>
+            <Dialog open={isSubmitConfirmOpen} onOpenChange={setIsSubmitConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Konfirmasi Submit Data</DialogTitle>
+                        <DialogDescription>
+                            Pastikan semua data customer sudah benar. Setelah disubmit, data ini tidak bisa diedit kembali.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="rounded-md border p-4 text-sm">
+                        <p className="font-medium text-red-600">Apakah Anda yakin ingin submit data ini?</p>
+                        <p className="text-muted-foreground mt-2">Jika masih ada data yang salah, silakan pilih Kembali dan edit terlebih dahulu.</p>
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsSubmitConfirmOpen(false)} disabled={isLoading}>
+                            Kembali
+                        </Button>
+
+                        <Button
+                            type="button"
+                            onClick={() => {
+                                setIsSubmitConfirmOpen(false);
+                                handleSubmit(pendingDecision);
+                            }}
+                            disabled={isLoading}
+                        >
+                            Saya Yakin
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
