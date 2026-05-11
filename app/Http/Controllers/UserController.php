@@ -55,6 +55,7 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
+            'NIK' => 'nullable|string|max:255',
             'uid' => 'nullable|string|max:255|unique:users,uid',
             'email' => 'required|string|lowercase|email|max:255|unique:' . User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
@@ -64,6 +65,7 @@ class UserController extends Controller
 
         $user = User::create([
             'name' => $request->name,
+            'NIK' => $request->NIK,
             'uid' => $request->uid,
             'email' => $request->email,
             'password' => Hash::make($request->password),
@@ -102,8 +104,9 @@ class UserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'uid' => 'nullable|string|max:255|unique:users,uid,' . $user->id,
+            'NIK' => 'nullable|string|max:255|unique:users,NIK,' . $user->id,
             'email' => 'required|string|lowercase|email|max:255|unique:users,email,' . $user->id,
-            'password' => ['sometimes', 'confirmed', Rules\Password::defaults()],
+            'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|exists:roles,id',
             'id_perusahaan' => 'nullable|exists:perusahaan,id',
         ]);
@@ -111,12 +114,10 @@ class UserController extends Controller
         try {
             $data = [
                 'name' => $request->name,
+                'uid' => $request->uid,
+                'NIK' => $request->NIK,
                 'email' => $request->email,
             ];
-
-            if ($request->has('uid')) {
-                $data['uid'] = $request->uid;
-            }
 
             if ($request->filled('password')) {
                 $data['password'] = Hash::make($request->password);
@@ -133,9 +134,15 @@ class UserController extends Controller
             $user->update($data);
             $user->syncRoles([$role->name]);
 
-            return redirect()->route('users.index')->with('message', 'User updated successfully.');
+            return redirect()
+                ->route('users.index')
+                ->with('message', 'User updated successfully.');
         } catch (\Exception $e) {
-            return redirect()->back()->withErrors(['error' => 'Failed to update user: ' . $e->getMessage()]);
+            return redirect()
+                ->back()
+                ->withErrors([
+                    'error' => 'Failed to update user: ' . $e->getMessage(),
+                ]);
         }
     }
 
