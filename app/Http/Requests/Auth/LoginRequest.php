@@ -27,7 +27,6 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'login_type' => ['required', 'in:email,uid'],
             'login' => ['required', 'string'],
             'password' => ['required', 'string'],
         ];
@@ -42,27 +41,35 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        // Tentukan field login
-        $field = $this->input('login_type') === 'uid'
-            ? 'uid'
-            : 'email';
+        $login = $this->input('login');
+        $password = $this->input('password');
+        $remember = $this->boolean('remember');
 
-        // Credentials login
-        $credentials = [
-            $field => $this->input('login'),
-            'password' => $this->input('password'),
+        $emailCredentials = [
+            'email' => $login,
+            'password' => $password,
         ];
 
-        // Attempt login
-        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
-
-            throw ValidationException::withMessages([
-                'login' => __('auth.failed'),
-            ]);
+        if (Auth::attempt($emailCredentials, $remember)) {
+            RateLimiter::clear($this->throttleKey());
+            return;
         }
 
-        RateLimiter::clear($this->throttleKey());
+        $uidCredentials = [
+            'uid' => $login,
+            'password' => $password,
+        ];
+
+        if (Auth::attempt($uidCredentials, $remember)) {
+            RateLimiter::clear($this->throttleKey());
+            return;
+        }
+
+        RateLimiter::hit($this->throttleKey());
+
+        throw ValidationException::withMessages([
+            'login' => __('auth.failed'),
+        ]);
     }
 
     /**
