@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/auth-layout';
 
 interface LoginForm {
-    login_type: 'email' | 'uid';
     login: string;
     password: string;
     remember: boolean;
@@ -28,7 +27,6 @@ interface LoginProps {
 
 export default function Login({ status, canResetPassword, company }: LoginProps) {
     const { data, setData, post, processing, errors, reset } = useForm<LoginForm>({
-        login_type: 'email',
         login: '',
         password: '',
         remember: false,
@@ -56,43 +54,19 @@ export default function Login({ status, canResetPassword, company }: LoginProps)
 
             <form className="flex flex-col gap-6" onSubmit={submit}>
                 <div className="grid gap-6">
-                    <div className="-mt-2 grid gap-2 text-left">
-                        <Label className="text-foreground block w-full text-left text-sm font-semibold">Login Method</Label>
-
-                        <div className="flex w-full gap-2">
-                            <Button
-                                type="button"
-                                variant={data.login_type === 'email' ? 'default' : 'outline'}
-                                className="h-10 w-1/2 font-bold"
-                                onClick={() => setData('login_type', 'email')}
-                            >
-                                Email
-                            </Button>
-
-                            <Button
-                                type="button"
-                                variant={data.login_type === 'uid' ? 'default' : 'outline'}
-                                className="h-10 w-1/2 font-bold"
-                                onClick={() => setData('login_type', 'uid')}
-                            >
-                                UID
-                            </Button>
-                        </div>
-                    </div>
-
                     <div className="grid gap-2 text-left">
-                        <Label htmlFor="login">{data.login_type === 'email' ? 'Email' : 'UID'}</Label>
+                        <Label htmlFor="login">Email atau UID</Label>
 
                         <Input
                             id="login"
-                            type={data.login_type === 'email' ? 'email' : 'text'}
+                            type="text"
                             required
                             autoFocus
-                            tabIndex={2}
-                            autoComplete={data.login_type === 'email' ? 'email' : 'username'}
+                            tabIndex={1}
+                            autoComplete="username"
                             value={data.login}
                             onChange={(e) => setData('login', e.target.value)}
-                            placeholder={data.login_type === 'email' ? 'email@example.com' : 'Masukkan UID'}
+                            placeholder="Masukkan email atau UID"
                         />
 
                         <InputError message={errors.login} />
