@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { Role, User, type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { columns } from './table/columns';
@@ -36,8 +37,13 @@ export default function ManageUsers() {
     const [userIdToEdit, setUserIdToEdit] = useState<number | null>(null);
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
+    const [editPassword, setEditPassword] = useState('');
+    const [editUid, setEditUid] = useState('');
+    const [editNIK, setEditNIK] = useState('');
     const [editRole, setEditRole] = useState<string>('');
     const [editCompany, setEditCompany] = useState<string>('');
+
+    const [showEditPassword, setShowEditPassword] = useState(false);
 
     const selectedEditRoleName = roles.find((role) => String(role.id) === editRole)?.name;
 
@@ -45,10 +51,14 @@ export default function ManageUsers() {
 
     const onEditClick = (id: number) => {
         const user = users.find((u) => u.id === id);
+
         if (user) {
             setUserIdToEdit(id);
             setEditName(user.name);
+            setEditUid(user.uid ?? '');
+            setEditNIK(user.NIK ?? '');
             setEditEmail(user.email);
+            setEditPassword('');
             setEditRole(user.roles && user.roles.length > 0 ? String(user.roles[0].id) : '');
             setEditCompany(user.id_perusahaan ? String(user.id_perusahaan) : '');
             setOpenEdit(true);
@@ -91,7 +101,10 @@ export default function ManageUsers() {
 
         const data = {
             name: editName,
+            uid: editUid || null,
+            NIK: editNIK || null,
             email: editEmail,
+            password: editPassword || null,
             role: editRole,
             id_perusahaan: selectedEditRoleName === 'user' ? editCompany : null,
         };
@@ -102,7 +115,10 @@ export default function ManageUsers() {
                     setOpenEdit(false);
                     setUserIdToEdit(null);
                     setEditName('');
+                    setEditUid('');
+                    setEditNIK('');
                     setEditEmail('');
+                    setEditPassword('');
                     setEditRole('');
                     setEditCompany('');
                     toast.success('User updated successfully!');
@@ -157,9 +173,12 @@ export default function ManageUsers() {
                     if (!open) {
                         setUserIdToEdit(null);
                         setEditName('');
+                        setEditUid('');
+                        setEditNIK('');
                         setEditEmail('');
                         setEditRole('');
                         setEditCompany('');
+                        setShowEditPassword(false);
                     }
                 }}
             >
@@ -182,6 +201,37 @@ export default function ManageUsers() {
                                 onChange={(e) => setEditEmail(e.target.value)}
                                 placeholder="Enter email"
                             />
+                        </div>
+                        <div>
+                            <Label htmlFor="edit_password">Password Baru</Label>
+                            <div className="relative">
+                                <Input
+                                    id="edit_password"
+                                    type={showEditPassword ? 'text' : 'password'}
+                                    value={editPassword}
+                                    onChange={(e) => setEditPassword(e.target.value)}
+                                    placeholder="Kosongkan jika tidak ingin mengubah password"
+                                    className="pr-10"
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditPassword((prev) => !prev)}
+                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                                    tabIndex={-1}
+                                >
+                                    {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <Label htmlFor="edit_uid">UID</Label>
+                            <Input id="edit_uid" value={editUid} onChange={(e) => setEditUid(e.target.value)} placeholder="Enter UID" />
+                        </div>
+
+                        <div>
+                            <Label htmlFor="edit_NIK">NIK</Label>
+                            <Input id="edit_NIK" value={editNIK} onChange={(e) => setEditNIK(e.target.value)} placeholder="Enter NIK" />
                         </div>
                         <div>
                             <Label htmlFor="edit_role">Role</Label>
