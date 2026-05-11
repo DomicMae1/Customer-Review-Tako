@@ -18,6 +18,7 @@ import {
     useReactTable,
     VisibilityState,
 } from '@tanstack/react-table';
+import { Eye, EyeOff } from 'lucide-react';
 import * as React from 'react';
 import { DataTableViewOptions } from './data-table-view-options';
 import { DataTablePagination } from './pagination';
@@ -50,9 +51,13 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
     const [openCreate, setOpenCreate] = React.useState(false);
     const [name, setName] = React.useState('');
+    const [uid, setUid] = React.useState('');
+    const [NIK, setNIK] = React.useState('');
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
     const [passwordConfirmation, setPasswordConfirmation] = React.useState('');
+    const [showPassword, setShowPassword] = React.useState(false);
+    const [showPasswordConfirmation, setShowPasswordConfirmation] = React.useState(false);
     const [selectedRole, setSelectedRole] = React.useState<string>('');
     const [selectedCompany, setSelectedCompany] = React.useState<string>('');
     const selectedRoleName = roles.find((role) => String(role.id) === selectedRole)?.name;
@@ -128,6 +133,8 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
         const data = {
             name,
+            uid: uid || null,
+            NIK: NIK || null,
             email,
             password,
             password_confirmation: passwordConfirmation,
@@ -139,9 +146,13 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             onSuccess: () => {
                 setOpenCreate(false);
                 setName('');
+                setUid('');
+                setNIK('');
                 setEmail('');
                 setPassword('');
                 setPasswordConfirmation('');
+                setShowPassword(false);
+                setShowPasswordConfirmation(false);
                 setSelectedRole('');
                 setSelectedCompany('');
             },
@@ -249,11 +260,15 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     setOpenCreate(open);
                     if (!open) {
                         setName('');
+                        setUid('');
+                        setNIK('');
                         setEmail('');
                         setPassword('');
                         setPasswordConfirmation('');
                         setSelectedRole('');
                         setSelectedCompany('');
+                        setShowPassword(false);
+                        setShowPasswordConfirmation(false);
                     }
                 }}
             >
@@ -273,23 +288,56 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                         </div>
                         <div>
                             <Label htmlFor="password">Password</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Enter password"
-                            />
+                            <div className="relative">
+                                <Input
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter password"
+                                    className="pr-10"
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((prev) => !prev)}
+                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                                    tabIndex={-1}
+                                >
+                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <Label htmlFor="password_confirmation">Confirm Password</Label>
-                            <Input
-                                id="password_confirmation"
-                                type="password"
-                                value={passwordConfirmation}
-                                onChange={(e) => setPasswordConfirmation(e.target.value)}
-                                placeholder="Confirm password"
-                            />
+                            <div className="relative">
+                                <Input
+                                    id="password_confirmation"
+                                    type={showPasswordConfirmation ? 'text' : 'password'}
+                                    value={passwordConfirmation}
+                                    onChange={(e) => setPasswordConfirmation(e.target.value)}
+                                    placeholder="Confirm password"
+                                    className="pr-10"
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPasswordConfirmation((prev) => !prev)}
+                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                                    tabIndex={-1}
+                                >
+                                    {showPasswordConfirmation ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <Label htmlFor="uid">UID</Label>
+                            <Input id="uid" value={uid} onChange={(e) => setUid(e.target.value)} placeholder="Enter UID" />
+                        </div>
+
+                        <div>
+                            <Label htmlFor="NIK">NIK</Label>
+                            <Input id="NIK" value={NIK} onChange={(e) => setNIK(e.target.value)} placeholder="Enter NIK" />
                         </div>
                         <div>
                             <Label htmlFor="role">Role</Label>
