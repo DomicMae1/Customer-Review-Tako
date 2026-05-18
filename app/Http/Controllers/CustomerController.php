@@ -20,6 +20,7 @@ use Clegginabox\PDFMerger\PDFMerger;
 use Illuminate\Support\Str;
 use Spatie\Browsershot\Browsershot;
 use Symfony\Component\Process\Process;
+use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
@@ -806,6 +807,10 @@ class CustomerController extends Controller
         $canEditToday = $createdDate === $today;
 
         $validated = $request->validate([
+            'id_perusahaan' => [
+            'required',
+                Rule::exists((new Perusahaan)->getTable(), 'id'),
+            ],
             'kategori_usaha' => 'required|string',
             'nama_perusahaan' => 'required|string',
             'bentuk_badan_usaha' => 'required|string',
@@ -1034,12 +1039,26 @@ class CustomerController extends Controller
             return inertia('m_customer/table/filled-already');
         }
 
+        $perusahaan = DB::connection('tako-perusahaan')
+            ->table('perusahaan')
+            ->where('id', $link->id_perusahaan)
+            ->first();
+
+        $domain = null;
+
+        if ($perusahaan?->id_domain) {
+            $domain = DB::table('domains')
+                ->where('id', $perusahaan->id_domain)
+                ->first();
+        }
+
         Log::info('Link detail', [
             'id_user' => $link->id_user,
             'id_perusahaan' => $link->id_perusahaan,
             'token' => $token,
+            'company' => $perusahaan,
+            'domain' => $domain,
         ]);
-
 
         return inertia('m_customer/table/public-data-form', [
             'customer_name' => $link->nama_customer,
@@ -1048,6 +1067,13 @@ class CustomerController extends Controller
             'user_id' => $link->id_user,
             'id_perusahaan' => $link->id_perusahaan,
             'isFilled' => $link->is_filled,
+
+            'company' => [
+                'id' => $perusahaan?->id,
+                'name' => $perusahaan?->nama_perusahaan ?? '-',
+                'logo' => $domain?->path_company_logo ?? null,
+                'domain' => $domain?->domain ?? null,
+            ],
         ]);
     }
 
