@@ -106,7 +106,7 @@ class UserController extends Controller
             'uid' => 'nullable|string|max:255|unique:users,uid,' . $user->id,
             'NIK' => 'nullable|string|max:255|unique:users,NIK,' . $user->id,
             'email' => 'required|string|lowercase|email|max:255|unique:users,email,' . $user->id,
-            'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
+            'password' => ['nullable', Rules\Password::defaults()],
             'role' => 'required|exists:roles,id',
             'id_perusahaan' => 'nullable|exists:perusahaan,id',
         ]);
@@ -290,6 +290,45 @@ class UserController extends Controller
             'success' => "Import selesai. {$imported} user baru ditambahkan, {$updated} user diperbarui, {$skipped} baris dilewati.",
             'import_errors' => $errors,
         ]);
+    }
+
+    public function resetPassword(User $user): RedirectResponse
+    {
+        try {
+            if (!$user->NIK) {
+                return redirect()
+                    ->back()
+                    ->withErrors([
+                        'NIK' => 'NIK user belum tersedia.',
+                    ]);
+            }
+
+            $nikOnlyNumber = preg_replace('/\D/', '', $user->NIK);
+
+            if (strlen($nikOnlyNumber) < 8) {
+                return redirect()
+                    ->back()
+                    ->withErrors([
+                        'NIK' => 'NIK user kurang dari 6 digit.',
+                    ]);
+            }
+
+            $defaultPassword = substr($nikOnlyNumber, -8);
+
+            $user->update([
+                'password' => Hash::make($defaultPassword),
+            ]);
+
+            return redirect()
+                ->back()
+                ->with('message', 'Password berhasil direset.');
+        } catch (\Throwable $th) {
+            return redirect()
+                ->back()
+                ->withErrors([
+                    'error' => 'Gagal reset password: ' . $th->getMessage(),
+                ]);
+        }
     }
 
     private function detectDelimiter(string $line): string

@@ -45,6 +45,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     Route::resource('role-manager', RoleController::class);
     Route::resource('perusahaan', PerusahaanController::class);
+    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
 });
 
 Route::post('customer/upload-temp', [CustomerController::class, 'upload'])->name('customer.upload');
