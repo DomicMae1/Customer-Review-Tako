@@ -383,6 +383,8 @@ class CustomerController extends Controller
 
             DB::commit();
 
+            $this->sendCustomerToExternalApi($customer, $user);
+
             return Inertia::location(route('customer.show', $customer->id));
         } catch (\Throwable $th) {
             DB::rollBack();
@@ -788,6 +790,15 @@ class CustomerController extends Controller
 
         $customer->load('attachments');
 
+        $userCompanyIds = $user->companies()->pluck('perusahaan.id')->toArray();
+
+        if (!empty($user->id_perusahaan)) {
+            $userCompanyIds[] = $user->id_perusahaan;
+        }
+        if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
+            abort(403, 'Anda tidak memiliki akses ke data customer ini.');
+        }
+
         return Inertia::render('m_customer/table/edit-data-form', [
             'customer' => $customer->load('attachments'),
         ]);
@@ -1003,7 +1014,10 @@ class CustomerController extends Controller
 
         Log::info("✅ Generate PDF Selesai. File: {$finalPath}");
 
-        return response()->download($finalPath, "Review_Customer_{$customer->id}.pdf", [
+        $namaPerusahaan = preg_replace('/[^A-Za-z0-9_\- ]/', '', $customer->nama_perusahaan);
+        $fileName = "Data Customer {$namaPerusahaan}.pdf";
+
+        return response()->download($finalPath, $fileName, [
             'Content-Type' => 'application/pdf',
         ])->deleteFileAfterSend(true);
     }

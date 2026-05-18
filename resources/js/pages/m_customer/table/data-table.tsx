@@ -36,6 +36,12 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const auth = props.auth || {};
     const userRole = auth.user?.roles?.[0]?.name ?? '';
 
+    const userHasMainCompany = Boolean(auth.user?.id_perusahaan);
+
+    const userHasCompanies = Array.isArray(auth.user?.companies) && auth.user.companies.length > 0;
+
+    const canAddCustomer = ['user', 'manager', 'direktur'].includes(userRole) && (userHasMainCompany || userHasCompanies);
+
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'keterangan_status', desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -243,7 +249,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
                 <div className="flex gap-2">
                     <DataTableViewOptions table={table} />
-                    {['user', 'manager', 'direktur'].includes(userRole) && (
+                    {canAddCustomer && (
                         <Dialog>
                             <DialogTrigger asChild>
                                 <Button className="h-9">Add customer</Button>
@@ -392,7 +398,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                         <DataTableViewOptions table={table} />
                     </div>
 
-                    {['user', 'manager', 'direktur'].includes(userRole) && (
+                    {canAddCustomer && (
                         <Dialog>
                             <DialogTrigger asChild>
                                 <Button className="h-9 w-full text-sm sm:w-auto">Add Customer</Button>

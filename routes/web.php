@@ -26,9 +26,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Di routes/web.php
     Route::post('/submit-customer-status', [CustomersStatusController::class, 'submit'])->name('customer-status.submit');
 
-    Route::post('/customer/check-npwp', [CustomerController::class, 'checkNpwp'])
-    ->name('customer.check-npwp');
-
+    Route::post('/customer/check-npwp', [CustomerController::class, 'checkNpwp'])->name('customer.check-npwp');
 
     // Route::post('/send-customer-notification', [CustomerController::class, 'sendNotification'])->name('customer.sendNotification');
 

@@ -6,15 +6,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Toaster } from '@/components/ui/sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Attachment, AttachmentType, MasterCustomer } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { File, Loader2, Moon, Sun } from 'lucide-react';
-// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-// import { AlertCircle } from "lucide-react"
-import { Toaster } from '@/components/ui/sonner';
 import axios from 'axios';
+import { File, Loader2, Moon, Sun } from 'lucide-react';
 import { FormEventHandler, useEffect, useState } from 'react';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';

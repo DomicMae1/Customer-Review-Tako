@@ -12,10 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Attachment, AttachmentType, Auth, MasterCustomer } from '@/types';
 import { router, useForm } from '@inertiajs/react';
-import { File } from 'lucide-react';
-// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-// import { AlertCircle } from "lucide-react"
 import axios from 'axios';
+import { File } from 'lucide-react';
 import { FormEventHandler, useEffect, useState } from 'react';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
@@ -380,7 +378,7 @@ export default function CustomerForm({
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
-            alert('Mohon lengkapi data formulir.');
+            toast.error('Mohon lengkapi data formulir.');
             setIsLoading(false);
             return;
         }
@@ -399,17 +397,17 @@ export default function CustomerForm({
 
         // Validasi Ketersediaan File Wajib
         if (!finalNpwp) {
-            alert('Dokumen NPWP wajib diunggah (atau tunggu hingga progress selesai).');
+            toast.error('Dokumen NPWP wajib diunggah.');
             setIsLoading(false);
             return;
         }
         if (!isCustomerPerorangan && !finalNib) {
-            alert('Dokumen NIB wajib diunggah.');
+            toast.error('Dokumen NIB wajib diunggah.');
             setIsLoading(false);
             return;
         }
         if (!finalKtp) {
-            alert('Dokumen KTP wajib diunggah.');
+            toast.error('Dokumen KTP wajib diunggah.');
             setIsLoading(false);
             return;
         }
@@ -452,7 +450,7 @@ export default function CustomerForm({
             processedAttachments.push(...processResults);
         } catch (processError) {
             console.error('Gagal memproses dokumen:', processError);
-            alert('Gagal memproses/mengompres dokumen. Silakan coba lagi.');
+            toast.error('Gagal memproses/mengompres dokumen. Silakan coba lagi.');
             setIsLoading(false);
             return; // Hentikan proses submit jika gagal kompres
         }
@@ -468,12 +466,12 @@ export default function CustomerForm({
             // UPDATE DATA
             router.put(route('customer.update', customer.id), finalPayload, {
                 onSuccess: () => {
-                    window.alert('✅ Data berhasil diperbarui!');
+                    toast.success('Data berhasil diperbarui!');
                     onSuccess?.(); // Callback jika ada (misal tutup modal)
                     setIsLoading(false);
                 },
                 onError: (errors) => {
-                    console.error('Update error:', errors);
+                    toast.error('Update error:', errors);
                     setIsLoading(false);
                 },
             });
@@ -481,11 +479,11 @@ export default function CustomerForm({
             // CREATE DATA BARU
             router.post(route('customer.store'), finalPayload, {
                 onSuccess: () => {
-                    window.alert('✅ Data berhasil disimpan!');
+                    toast.success('Data berhasil disimpan!');
                     setIsLoading(false);
                 },
                 onError: (errors) => {
-                    console.error('Store error:', errors);
+                    toast.error('Store error:', errors);
                     setIsLoading(false);
                 },
             });
