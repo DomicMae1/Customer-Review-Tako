@@ -20,6 +20,7 @@ use Clegginabox\PDFMerger\PDFMerger;
 use Illuminate\Support\Str;
 use Spatie\Browsershot\Browsershot;
 use Symfony\Component\Process\Process;
+use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
@@ -381,6 +382,8 @@ class CustomerController extends Controller
             ]);
 
             DB::commit();
+
+            $this->sendCustomerToExternalApi($customer, $user);
 
             return Inertia::location(route('customer.show', $customer->id));
         } catch (\Throwable $th) {
@@ -787,6 +790,15 @@ class CustomerController extends Controller
 
         $customer->load('attachments');
 
+        $userCompanyIds = $user->companies()->pluck('perusahaan.id')->toArray();
+
+        if (!empty($user->id_perusahaan)) {
+            $userCompanyIds[] = $user->id_perusahaan;
+        }
+        if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
+            abort(403, 'Anda tidak memiliki akses ke data customer ini.');
+        }
+
         return Inertia::render('m_customer/table/edit-data-form', [
             'customer' => $customer->load('attachments'),
         ]);
@@ -806,6 +818,10 @@ class CustomerController extends Controller
         $canEditToday = $createdDate === $today;
 
         $validated = $request->validate([
+            'id_perusahaan' => [
+            'required',
+                Rule::exists((new Perusahaan)->getTable(), 'id'),
+            ],
             'kategori_usaha' => 'required|string',
             'nama_perusahaan' => 'required|string',
             'bentuk_badan_usaha' => 'required|string',
@@ -998,7 +1014,10 @@ class CustomerController extends Controller
 
         Log::info("✅ Generate PDF Selesai. File: {$finalPath}");
 
-        return response()->download($finalPath, "Review_Customer_{$customer->id}.pdf", [
+        $namaPerusahaan = preg_replace('/[^A-Za-z0-9_\- ]/', '', $customer->nama_perusahaan);
+        $fileName = "Data Customer {$namaPerusahaan}.pdf";
+
+        return response()->download($finalPath, $fileName, [
             'Content-Type' => 'application/pdf',
         ])->deleteFileAfterSend(true);
     }
@@ -1034,12 +1053,26 @@ class CustomerController extends Controller
             return inertia('m_customer/table/filled-already');
         }
 
+        $perusahaan = DB::connection('tako-perusahaan')
+            ->table('perusahaan')
+            ->where('id', $link->id_perusahaan)
+            ->first();
+
+        $domain = null;
+
+        if ($perusahaan?->id_domain) {
+            $domain = DB::table('domains')
+                ->where('id', $perusahaan->id_domain)
+                ->first();
+        }
+
         Log::info('Link detail', [
             'id_user' => $link->id_user,
             'id_perusahaan' => $link->id_perusahaan,
             'token' => $token,
+            'company' => $perusahaan,
+            'domain' => $domain,
         ]);
-
 
         return inertia('m_customer/table/public-data-form', [
             'customer_name' => $link->nama_customer,
@@ -1048,6 +1081,13 @@ class CustomerController extends Controller
             'user_id' => $link->id_user,
             'id_perusahaan' => $link->id_perusahaan,
             'isFilled' => $link->is_filled,
+
+            'company' => [
+                'id' => $perusahaan?->id,
+                'name' => $perusahaan?->nama_perusahaan ?? '-',
+                'logo' => $domain?->path_company_logo ?? null,
+                'domain' => $domain?->domain ?? null,
+            ],
         ]);
     }
 

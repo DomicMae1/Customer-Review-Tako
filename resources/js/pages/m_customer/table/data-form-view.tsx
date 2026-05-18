@@ -11,6 +11,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { File, Loader2, SquareCheck, SquareX } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import Swal from 'sweetalert2';
 
 interface UploadedFileState {
@@ -134,7 +135,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
     const handleSubmit = async (decision: 'approved' | 'rejected' | null = null) => {
         if (!customer.id) {
-            alert('❌ Customer ID tidak ditemukan.');
+            toast.error('❌ Customer ID tidak ditemukan.');
             return;
         }
         setIsLoading(true);
@@ -257,24 +258,39 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                     };
                 }
             } catch (error) {
-                console.error('Error checking NPWP:', error);
-                // Opsional: Alert jika error server, atau lanjut saja
+                toast.error('Error checking NPWP:', error);
             }
         }
 
         if (userRole === 'lawyer' && decision === 'rejected') {
             if (!keterangan.trim()) {
-                const message = '❌ Keterangan wajib diisi jika status Bermasalah.';
+                const message = 'Keterangan wajib diisi jika status Bermasalah.';
                 setAttachmentError(message);
-                alert(message);
+                toast.error(message);
                 setIsLoading(false);
                 return;
             }
 
             if (!attachFile) {
-                const message = '❌ File PDF wajib diunggah jika status Bermasalah.';
+                const message = 'File PDF wajib diunggah jika status Bermasalah.';
                 setAttachmentError(message);
-                alert(message);
+                toast.error(message);
+                setIsLoading(false);
+                return;
+            }
+        } else if (userRole === 'auditor' && auditorStartReview) {
+            if (!keterangan.trim()) {
+                const message = 'Keterangan auditor wajib diisi.';
+                setAttachmentError(message);
+                toast.error(message);
+                setIsLoading(false);
+                return;
+            }
+
+            if (!attachFile) {
+                const message = 'File PDF auditor wajib diunggah.';
+                setAttachmentError(message);
+                toast.error(message);
                 setIsLoading(false);
                 return;
             }
@@ -297,6 +313,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
             activeFile = attachFile;
             // Tentukan type berdasarkan role reviewer
             if (userRole === 'auditor') fileType = 'lampiran_auditor';
+            if (userRole === 'lawyer') fileType = 'lampiran_lawyer';
             else fileType = 'lampiran_review_general';
         }
 
@@ -326,7 +343,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                 };
             } catch (err) {
                 console.error('Gagal memproses file:', err);
-                alert('❌ Gagal memproses/mengompres dokumen. Silakan coba lagi.');
+                toast.error('❌ Gagal memproses/mengompres dokumen. Silakan coba lagi.');
                 setIsLoading(false);
                 return; // Stop proses submit
             }
@@ -413,16 +430,21 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
             preserveState: true,
             forceFormData: true,
             onSuccess: () => {
-                alert('✅ Data berhasil disubmit!');
+                toast.success('Data berhasil disubmit!');
                 setAttachFile(null);
                 setAttachFileUser(null);
                 setAttachFileStatuses([]);
                 setIsLoading(false);
-                router.visit(`/customer/${customer.id}`, { replace: true, preserveState: false });
+                setTimeout(() => {
+                    router.visit(`/customer/${customer.id}`, {
+                        replace: true,
+                        preserveState: false,
+                    });
+                }, 1300);
             },
             onError: (errors) => {
                 const firstError = errors[Object.keys(errors)[0]];
-                alert(`❌ Gagal submit: ${firstError}`);
+                toast.error(`❌ Gagal submit: ${firstError}`);
                 setIsLoading(false);
             },
         });
@@ -1221,35 +1243,46 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                 </div>
             </div>
             <Dialog open={isSubmitConfirmOpen} onOpenChange={setIsSubmitConfirmOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Konfirmasi Submit Data</DialogTitle>
-                        <DialogDescription>
-                            Pastikan semua data customer sudah benar. Setelah disubmit, data ini tidak bisa diedit kembali.
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="max-h-[90dvh] w-[calc(100vw-32px)] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl p-0 sm:max-w-lg md:max-w-xl lg:max-w-2xl">
+                    <div className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
+                        <DialogHeader className="space-y-2 text-left">
+                            <DialogTitle className="pr-8 text-base font-semibold sm:text-lg">Konfirmasi Submit Data</DialogTitle>
+                            <DialogDescription className="text-sm leading-relaxed">
+                                Pastikan semua data customer sudah benar. Setelah disubmit, data ini tidak bisa diedit kembali.
+                            </DialogDescription>
+                        </DialogHeader>
 
-                    <div className="rounded-md border p-4 text-sm">
-                        <p className="font-medium text-red-600">Apakah Anda yakin ingin submit data ini?</p>
-                        <p className="text-muted-foreground mt-2">Jika masih ada data yang salah, silakan pilih Kembali dan edit terlebih dahulu.</p>
+                        <div className="mt-5 rounded-lg border bg-red-50 p-4 text-sm dark:bg-red-950/20">
+                            <p className="font-semibold text-red-600 dark:text-red-400">Apakah Anda yakin ingin submit data ini?</p>
+                            <p className="text-muted-foreground mt-2 leading-relaxed">
+                                Jika masih ada data yang salah, silakan pilih Kembali dan edit terlebih dahulu.
+                            </p>
+                        </div>
+
+                        <DialogFooter className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsSubmitConfirmOpen(false)}
+                                disabled={isLoading}
+                                className="w-full sm:w-auto"
+                            >
+                                Kembali
+                            </Button>
+
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    setIsSubmitConfirmOpen(false);
+                                    handleSubmit(pendingDecision);
+                                }}
+                                disabled={isLoading}
+                                className="w-full sm:w-auto"
+                            >
+                                Saya Yakin
+                            </Button>
+                        </DialogFooter>
                     </div>
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsSubmitConfirmOpen(false)} disabled={isLoading}>
-                            Kembali
-                        </Button>
-
-                        <Button
-                            type="button"
-                            onClick={() => {
-                                setIsSubmitConfirmOpen(false);
-                                handleSubmit(pendingDecision);
-                            }}
-                            disabled={isLoading}
-                        >
-                            Saya Yakin
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

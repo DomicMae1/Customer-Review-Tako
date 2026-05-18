@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Users/ManageUsers.tsx
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,6 +11,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import Swal from 'sweetalert2';
 import { columns } from './table/columns';
 import { DataTable } from './table/data-table';
 
@@ -99,15 +101,18 @@ export default function ManageUsers() {
             return;
         }
 
-        const data = {
+        const data: any = {
             name: editName,
             uid: editUid || null,
             NIK: editNIK || null,
             email: editEmail,
-            password: editPassword || null,
             role: editRole,
             id_perusahaan: selectedEditRoleName === 'user' ? editCompany : null,
         };
+
+        if (editPassword.trim()) {
+            data.password = editPassword;
+        }
 
         if (userIdToEdit !== null) {
             router.put(`/users/${userIdToEdit}`, data, {
@@ -137,11 +142,41 @@ export default function ManageUsers() {
         }
     };
 
+    const handleResetPassword = async (id: number) => {
+        const result = await Swal.fire({
+            title: 'Reset Password?',
+            text: 'Password user akan dikembalikan ke default 6 angka terakhir NIK.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, reset',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+        });
+
+        if (!result.isConfirmed) return;
+
+        router.post(
+            route('users.reset-password', id),
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Password berhasil direset.');
+                },
+                onError: (errors) => {
+                    const firstError = Object.values(errors)[0];
+                    toast.error(String(firstError ?? 'Gagal reset password.'));
+                },
+            },
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Manage Users" />
             <div className="p-4">
-                <DataTable columns={columns(onDeleteClick, onEditClick)} data={users} />
+                <DataTable columns={columns(onDeleteClick, onEditClick, handleResetPassword)} data={users} />
             </div>
 
             <Dialog open={openDelete} onOpenChange={setOpenDelete}>

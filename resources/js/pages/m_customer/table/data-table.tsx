@@ -22,6 +22,7 @@ import { Copy } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { DataTableViewOptions } from './data-table-view-options';
 import { DataTablePagination } from './pagination';
 
@@ -34,6 +35,12 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const { props } = usePage();
     const auth = props.auth || {};
     const userRole = auth.user?.roles?.[0]?.name ?? '';
+
+    const userHasMainCompany = Boolean(auth.user?.id_perusahaan);
+
+    const userHasCompanies = Array.isArray(auth.user?.companies) && auth.user.companies.length > 0;
+
+    const canAddCustomer = ['user', 'manager', 'direktur'].includes(userRole) && (userHasMainCompany || userHasCompanies);
 
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'keterangan_status', desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -111,7 +118,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
     const handleSubmitName = async () => {
         if (!customerName.trim()) {
-            alert('Nama customer tidak boleh kosong.');
+            toast.error('Nama customer tidak boleh kosong.');
             return;
         }
 
@@ -122,7 +129,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         }
 
         if (!id_perusahaan) {
-            alert('ID Perusahaan tidak valid.');
+            toast.error('ID Perusahaan tidak valid.');
             return;
         }
 
@@ -139,15 +146,23 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             setIsNameDialogOpen(false);
             setIsLinkDialogOpen(true);
             setCustomerName('');
+
+            toast.success('Link berhasil dibuat.');
         } catch (error: any) {
             console.error('Gagal membuat link:', error);
-            alert(error?.response?.data?.message ?? 'Terjadi kesalahan saat membuat link.');
+
+            toast.error(error?.response?.data?.message ?? 'Terjadi kesalahan saat membuat link.');
         }
     };
 
     const handleCopy = async () => {
-        await navigator.clipboard.writeText(generatedLink);
-        alert('Link disalin ke clipboard!');
+        try {
+            await navigator.clipboard.writeText(generatedLink);
+            toast.success('Link disalin ke clipboard!');
+        } catch (error) {
+            console.error('Gagal menyalin link:', error);
+            toast.error('Gagal menyalin link.');
+        }
     };
 
     return (
@@ -234,7 +249,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
                 <div className="flex gap-2">
                     <DataTableViewOptions table={table} />
-                    {['user', 'manager', 'direktur'].includes(userRole) && (
+                    {canAddCustomer && (
                         <Dialog>
                             <DialogTrigger asChild>
                                 <Button className="h-9">Add customer</Button>
@@ -383,7 +398,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                         <DataTableViewOptions table={table} />
                     </div>
 
-                    {['user', 'manager', 'direktur'].includes(userRole) && (
+                    {canAddCustomer && (
                         <Dialog>
                             <DialogTrigger asChild>
                                 <Button className="h-9 w-full text-sm sm:w-auto">Add Customer</Button>
@@ -490,35 +505,40 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             </Dialog>
 
             <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>
-                <DialogContent className="w-[95vw] max-w-[95vw] overflow-y-auto rounded-xl p-4 sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-base sm:text-lg">Link Berhasil Dibuat</DialogTitle>
-                        <DialogDescription className="text-sm">Salin link berikut dan kirimkan ke customer.</DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="max-h-[90dvh] w-[calc(100vw-32px)] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl p-0 sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
+                    <div className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
+                        <DialogHeader className="space-y-2 text-left">
+                            <DialogTitle className="pr-8 text-base font-semibold sm:text-lg">Link Berhasil Dibuat</DialogTitle>
+                            <DialogDescription className="text-sm leading-relaxed">Salin link berikut dan kirimkan ke customer.</DialogDescription>
+                        </DialogHeader>
 
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded bg-gray-100 px-3 py-2 dark:bg-neutral-900">
-                        <div className="flex-1 overflow-x-auto whitespace-nowrap">
-                            <span className="text-xs sm:text-sm">{generatedLink}</span>
+                        <div className="mt-5 rounded-lg border bg-gray-50 p-3 dark:bg-neutral-900">
+                            <div className="flex items-center gap-2">
+                                <div className="min-w-0 flex-1 rounded-md bg-white px-3 py-2 dark:bg-neutral-950">
+                                    <div className="w-full overflow-x-auto overflow-y-hidden pb-1">
+                                        <p className="w-max text-xs leading-6 whitespace-nowrap text-gray-700 sm:text-sm dark:text-gray-200">
+                                            {generatedLink}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <Button type="button" onClick={handleCopy} variant="outline" className="h-10 shrink-0 gap-2 px-3">
+                                    <Copy className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Copy</span>
+                                </Button>
+                            </div>
                         </div>
 
-                        <button onClick={handleCopy} className="hidden shrink-0 text-blue-600 hover:text-blue-800 sm:block">
-                            <Copy className="h-5 w-5" />
-                        </button>
+                        <div className="mt-5 flex justify-end">
+                            <Button
+                                type="button"
+                                onClick={() => setIsLinkDialogOpen(false)}
+                                className="w-full bg-green-600 hover:bg-green-700 sm:w-auto"
+                            >
+                                Tutup
+                            </Button>
+                        </div>
                     </div>
-
-                    <button
-                        onClick={handleCopy}
-                        className="mt-3 block w-full rounded-lg bg-blue-600 py-2 text-sm text-white hover:bg-blue-700 sm:hidden"
-                    >
-                        Copy
-                    </button>
-
-                    <Button
-                        onClick={() => setIsLinkDialogOpen(false)}
-                        className="mt-4 w-full rounded-lg bg-green-600 py-2 text-sm hover:bg-green-700"
-                    >
-                        Tutup
-                    </Button>
                 </DialogContent>
             </Dialog>
         </div>

@@ -12,14 +12,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Attachment, AttachmentType, Auth, MasterCustomer } from '@/types';
 import { router, useForm } from '@inertiajs/react';
-import { File } from 'lucide-react';
-// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-// import { AlertCircle } from "lucide-react"
 import axios from 'axios';
+import { File } from 'lucide-react';
 import { FormEventHandler, useEffect, useState } from 'react';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { NumericFormat } from 'react-number-format';
+import { toast } from 'sonner';
 
 export default function CustomerForm({
     auth,
@@ -33,6 +32,7 @@ export default function CustomerForm({
 }) {
     const { data, setData, processing, errors } = useForm<MasterCustomer>({
         id: customer?.id || null,
+        id_perusahaan: customer?.id_perusahaan ? String(customer.id_perusahaan) : '',
         kategori_usaha: customer?.kategori_usaha || '',
         nama_perusahaan: customer?.nama_perusahaan || '',
         bentuk_badan_usaha: customer?.bentuk_badan_usaha || '',
@@ -192,52 +192,32 @@ export default function CustomerForm({
         );
     }, [customer]);
 
-    // let counter = 1;
-
-    // async function uploadAttachment(file: File, type: AttachmentType, npwpNumber: string): Promise<Attachment> {
-    //     const formData = new FormData();
-    //     const id_perusahaan = auth.user.id_perusahaan;
-    //     formData.append('file', file);
-    //     formData.append('order', String(counter));
-    //     formData.append('npwp_number', npwpNumber);
-    //     formData.append('type', type);
-    //     formData.append('id_perusahaan', String(id_perusahaan));
-
-    //     const res = await axios.post('/customer/upload-temp', formData);
-
-    //     counter++;
-
-    //     return {
-    //         id: 0,
-    //         customer_id: customer?.id ?? 0,
-    //         nama_file: res.data.nama_file,
-    //         path: res.data.path,
-    //         type,
-    //     };
-    // }
-
-    // const extractAttachmentFromStatus = (statuses: any[], type: AttachmentType): Attachment | null => {
-    //     if (statuses.length > 0) {
-    //         const file = statuses[0];
-    //         return {
-    //             id: 0,
-    //             customer_id: customer?.id ?? 0,
-    //             nama_file: file.fileName,
-    //             path: file.result,
-    //             type,
-    //         };
-    //     }
-    //     return null;
-    // };
-
     const handleSubmit: FormEventHandler = async (e) => {
         e.preventDefault();
 
         const newErrors: typeof errors_kategori = {};
 
         setIsLoading(true);
+        const showValidationError = (field: keyof typeof errors_kategori, message: string) => {
+            setErrors((prev) => ({ ...prev, [field]: message }));
+            toast.error(message);
+            setIsLoading(false);
+        };
+
+        const normalizePhone = (phone?: string | null) => {
+            if (!phone) return null;
+
+            const cleaned = phone.replace(/\s/g, '');
+
+            if (cleaned === '+62' || cleaned === '+') {
+                return null;
+            }
+
+            return phone;
+        };
 
         const isCustomerPerorangan = data.bentuk_badan_usaha === 'Customer Perorangan';
+        const isManagerOrDirektur = auth.user?.roles?.some((role: { name: string }) => ['manager', 'direktur'].includes(role.name));
 
         if (!customer?.id) {
             try {
@@ -291,117 +271,80 @@ export default function CustomerForm({
             }
         }
 
-        if (!data.kategori_usaha) {
-            const message = 'Kategori usaha wajib dipilih';
-            setErrors((prev) => ({ ...prev, kategori_usaha: message }));
-            alert(message);
+        if (isManagerOrDirektur && !data.id_perusahaan) {
+            toast.error('Perusahaan wajib dipilih');
             setIsLoading(false);
+            return;
+        }
+
+        if (!data.kategori_usaha) {
+            showValidationError('kategori_usaha', 'Kategori usaha wajib dipilih');
             return;
         }
 
         if (data.kategori_usaha === 'lain2' && !lainKategori.trim()) {
-            const message = 'Kategori lainnya wajib diisi';
-            setErrors((prev) => ({ ...prev, lain_kategori: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('lain_kategori', 'Kategori lainnya wajib diisi');
             return;
         }
 
         if (!data.nama_perusahaan) {
-            const message = 'Nama Perusahaan wajib diisi';
-            setErrors((prev) => ({ ...prev, nama_perusahaan: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('nama_perusahaan', 'Nama Perusahaan wajib diisi');
             return;
         }
 
         if (!data.bentuk_badan_usaha) {
-            const message = 'Bentuk badan usaha wajib dipilih';
-            setErrors((prev) => ({ ...prev, bentuk_badan_usaha: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('bentuk_badan_usaha', 'Bentuk badan usaha wajib dipilih');
             return;
         }
 
         if (!data.alamat_lengkap || !data.alamat_lengkap.trim()) {
-            const message = 'Alamat lengkap wajib diisi';
-            setErrors((prev) => ({ ...prev, alamat_lengkap: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('alamat_lengkap', 'Alamat lengkap wajib diisi');
             return;
         }
 
         if (!data.kota || !data.kota.trim()) {
-            const message = 'Kota wajib diisi';
-            setErrors((prev) => ({ ...prev, kota: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('kota', 'Kota wajib diisi');
             return;
         }
 
         if (!data.no_telp || data.no_telp.trim().length <= 3) {
-            const message = 'No Telpon Perusahaan wajib diisi';
-            setErrors((prev) => ({ ...prev, no_telp: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('no_telp', 'No Telpon Perusahaan wajib diisi');
             return;
         }
 
         if (!data.alamat_penagihan || !data.alamat_penagihan.trim()) {
-            const message = 'Alamat Perusahaan wajib diisi';
-            setErrors((prev) => ({ ...prev, alamat_penagihan: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('alamat_penagihan', 'Alamat Perusahaan wajib diisi');
             return;
         }
 
         if (!data.email || !data.email.trim()) {
-            const message = 'Email Perusahaan wajib diisi';
-            setErrors((prev) => ({ ...prev, email: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('email', 'Email Perusahaan wajib diisi');
             return;
         }
 
         if (!data.top || !data.top.trim()) {
-            const message = 'Term of Payment wajib diisi';
-            setErrors((prev) => ({ ...prev, top: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('top', 'Term of Payment wajib diisi');
             return;
         }
 
         if (!data.status_perpajakan) {
-            const message = 'Status perpajakan wajib dipilih';
-            setErrors((prev) => ({ ...prev, status_perpajakan: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('status_perpajakan', 'Status perpajakan wajib dipilih');
             return;
         }
 
         if (!data.no_npwp || !data.no_npwp.trim()) {
-            const message = 'Nomer NPWP wajib diisi';
-            setErrors((prev) => ({ ...prev, no_npwp: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('no_npwp', 'Nomer NPWP wajib diisi');
             return;
         }
 
         const npwpOnlyNumber = data.no_npwp.replace(/\D/g, '');
-
         if (npwpOnlyNumber.length < 15) {
-            const message = 'Nomer NPWP belum lengkap';
-            setErrors((prev) => ({ ...prev, no_npwp: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('no_npwp', 'Nomer NPWP belum lengkap');
             return;
         }
 
         if (!data.no_npwp_16 || !data.no_npwp_16.trim()) {
-            const message = 'Nomer NPWP 16 wajib diisi';
-            setErrors((prev) => ({ ...prev, no_npwp_16: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('no_npwp_16', 'Nomer NPWP 16 wajib diisi');
             return;
         }
 
@@ -409,72 +352,33 @@ export default function CustomerForm({
         const npwp16OnlyNumber = data.no_npwp_16.replace(/\D/g, '');
 
         if (npwp16OnlyNumber.length < 16) {
-            const message = 'Nomer NPWP 16 belum lengkap';
-            setErrors((prev) => ({ ...prev, no_npwp_16: message }));
-            alert(message);
-            setIsLoading(false);
-            return;
-        }
-
-        if (!data.nama_pj || !data.nama_pj.trim()) {
-            const message = 'Nama Direktur wajib diisi';
-            setErrors((prev) => ({ ...prev, nama_pj: message }));
-            alert(message);
-            setIsLoading(false);
-            return;
-        }
-
-        if (!data.no_ktp_pj || !data.no_ktp_pj.trim()) {
-            const message = 'NIK Direktur wajib diisi';
-            setErrors((prev) => ({ ...prev, no_ktp_pj: message }));
-            alert(message);
-            setIsLoading(false);
-            return;
-        }
-
-        if (!data.no_telp_pj || data.no_telp_pj.trim().length <= 3) {
-            const message = 'No Telp Direktur wajib diisi';
-            setErrors((prev) => ({ ...prev, no_telp_pj: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('no_npwp_16', 'Nomer NPWP 16 belum lengkap');
             return;
         }
 
         if (!data.nama_personal || !data.nama_personal.trim()) {
-            const message = 'Nama Personal wajib diisi';
-            setErrors((prev) => ({ ...prev, nama_personal: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('nama_personal', 'Nama Personal wajib diisi');
             return;
         }
 
         if (!data.jabatan_personal || !data.jabatan_personal.trim()) {
-            const message = 'Jabatan Personal wajib diisi';
-            setErrors((prev) => ({ ...prev, jabatan_personal: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('jabatan_personal', 'Jabatan Personal wajib diisi');
             return;
         }
 
         if (!data.no_telp_personal || data.no_telp_personal.trim().length <= 3) {
-            const message = 'No Telp Personal wajib diisi';
-            setErrors((prev) => ({ ...prev, no_telp_personal: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('no_telp_personal', 'No Telp Personal wajib diisi');
             return;
         }
 
         if (!data.email_personal || !data.email_personal.trim()) {
-            const message = 'Email Personal wajib diisi';
-            setErrors((prev) => ({ ...prev, email_personal: message }));
-            alert(message);
-            setIsLoading(false);
+            showValidationError('email_personal', 'Email Personal wajib diisi');
             return;
         }
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
-            alert('Mohon lengkapi data formulir.');
+            toast.error('Mohon lengkapi data formulir.');
             setIsLoading(false);
             return;
         }
@@ -493,17 +397,17 @@ export default function CustomerForm({
 
         // Validasi Ketersediaan File Wajib
         if (!finalNpwp) {
-            alert('Dokumen NPWP wajib diunggah (atau tunggu hingga progress selesai).');
+            toast.error('Dokumen NPWP wajib diunggah.');
             setIsLoading(false);
             return;
         }
         if (!isCustomerPerorangan && !finalNib) {
-            alert('Dokumen NIB wajib diunggah.');
+            toast.error('Dokumen NIB wajib diunggah.');
             setIsLoading(false);
             return;
         }
         if (!finalKtp) {
-            alert('Dokumen KTP wajib diunggah.');
+            toast.error('Dokumen KTP wajib diunggah.');
             setIsLoading(false);
             return;
         }
@@ -546,14 +450,15 @@ export default function CustomerForm({
             processedAttachments.push(...processResults);
         } catch (processError) {
             console.error('Gagal memproses dokumen:', processError);
-            alert('Gagal memproses/mengompres dokumen. Silakan coba lagi.');
+            toast.error('Gagal memproses/mengompres dokumen. Silakan coba lagi.');
             setIsLoading(false);
             return; // Hentikan proses submit jika gagal kompres
         }
 
         const finalPayload = {
             ...data,
-            id_perusahaan: auth.user.id_perusahaan,
+            no_telp_pj: normalizePhone(data.no_telp_pj),
+            id_perusahaan: Number(data.id_perusahaan),
             attachments: processedAttachments,
         };
 
@@ -561,12 +466,12 @@ export default function CustomerForm({
             // UPDATE DATA
             router.put(route('customer.update', customer.id), finalPayload, {
                 onSuccess: () => {
-                    window.alert('✅ Data berhasil diperbarui!');
+                    toast.success('Data berhasil diperbarui!');
                     onSuccess?.(); // Callback jika ada (misal tutup modal)
                     setIsLoading(false);
                 },
                 onError: (errors) => {
-                    console.error('Update error:', errors);
+                    toast.error('Update error:', errors);
                     setIsLoading(false);
                 },
             });
@@ -574,11 +479,11 @@ export default function CustomerForm({
             // CREATE DATA BARU
             router.post(route('customer.store'), finalPayload, {
                 onSuccess: () => {
-                    window.alert('✅ Data berhasil disimpan!');
+                    toast.success('Data berhasil disimpan!');
                     setIsLoading(false);
                 },
                 onError: (errors) => {
-                    console.error('Store error:', errors);
+                    toast.error('Store error:', errors);
                     setIsLoading(false);
                 },
             });
@@ -597,7 +502,7 @@ export default function CustomerForm({
                                     Perusahaan <span className="text-red-500">*</span>
                                 </Label>
                                 <Select
-                                    value={data.id_perusahaan}
+                                    value={data.id_perusahaan ? String(data.id_perusahaan) : ''}
                                     onValueChange={(value) => {
                                         setData('id_perusahaan', value);
                                         setErrors((prev) => ({ ...prev, id_perusahaan: undefined }));
@@ -763,7 +668,7 @@ export default function CustomerForm({
                                     'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
                                     'aria-invalid:ring-destructive/20 aria-invalid:border-destructive',
                                 )}
-                                placeholder="Enter nomor fax (optional)"
+                                placeholder="Masukkan nomor fax (optional)"
                                 allowNegative={false}
                                 decimalScale={0}
                             />
@@ -866,13 +771,11 @@ export default function CustomerForm({
                             />
                         </div>
                     </div>
-                    <div className="col-span-3 mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="col-span-3 mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                         <h1 className="text-xl font-semibold">Data Direktur</h1>
                         <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div className="w-full">
-                                <Label htmlFor="nama_pj">
-                                    Nama <span className="text-red-500">*</span>
-                                </Label>
+                                <Label htmlFor="nama_pj">Nama</Label>
                                 <Input
                                     id="nama_pj"
                                     value={data.nama_pj}
@@ -881,9 +784,7 @@ export default function CustomerForm({
                                 />
                             </div>
                             <div className="w-full">
-                                <Label htmlFor="no_ktp_pj">
-                                    Nik Direktur <span className="text-red-500">*</span>
-                                </Label>
+                                <Label htmlFor="no_ktp_pj">Nik Direktur</Label>
                                 <NumericFormat
                                     id="no_ktp_pj"
                                     value={data.no_ktp_pj}
@@ -893,15 +794,13 @@ export default function CustomerForm({
                                         'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
                                         'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
                                     )}
-                                    placeholder="Enter Nik Direktur"
+                                    placeholder="Masukkan Nik Direktur"
                                     allowNegative={false}
                                     decimalScale={0}
                                 />
                             </div>
                             <div className="w-full">
-                                <Label htmlFor="no_telp_pj">
-                                    No. Telp. Direktur <span className="text-red-500">*</span>
-                                </Label>
+                                <Label htmlFor="no_telp_pj">No. Telp. Direktur</Label>
                                 <PhoneInput
                                     defaultCountry="id"
                                     value={data.no_telp_pj?.toString() || ''}
@@ -911,13 +810,13 @@ export default function CustomerForm({
                                         'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
                                         'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
                                     )}
-                                    placeholder="Enter No. Telp. Direktur"
+                                    placeholder="Masukkan No. Telp. Direktur"
                                 />
                             </div>
                         </div>
                     </div>
-                    <div className="col-span-3 mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <h1 className="text-xl font-semibold">Data Personal</h1>
+                    <div className="col-span-3 mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                        <h1 className="text-xl font-semibold">Data PIC</h1>
                         <div className="col-span-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                             <div className="w-full">
                                 <Label htmlFor="nama_personal">

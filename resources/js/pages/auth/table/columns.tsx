@@ -8,6 +8,7 @@ import { MoreHorizontal } from 'lucide-react';
 export const columns = (
     onDeleteClick: (id: number) => void,
     onEditClick: (id: number) => void,
+    onResetPasswordClick: (id: number) => void,
 ): ColumnDef<User>[] => [
     {
         accessorKey: 'name',
@@ -41,6 +42,7 @@ export const columns = (
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => onEditClick(user.id)}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onResetPasswordClick(user.id)}>Reset Password</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onDeleteClick(user.id)}>Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
