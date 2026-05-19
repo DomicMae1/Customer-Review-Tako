@@ -3,16 +3,28 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { MasterCustomer } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
 import axios from 'axios';
 import { MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
+import Swal from 'sweetalert2';
 
-const downloadPdf = async (id: number) => {
+const downloadPdf = async (id: number, nama_perusahaan: string) => {
     try {
         // Beri feedback ke user bahwa proses sedang berjalan
-        const confirmDownload = window.confirm('Sedang memproses PDF (ini mungkin memakan waktu beberapa detik). Lanjutkan?');
-        if (!confirmDownload) return;
+        const result = await Swal.fire({
+            title: 'Download PDF?',
+            text: 'Sedang memproses PDF. Ini mungkin memakan waktu beberapa detik.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Lanjutkan',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#dc2626',
+        });
+
+        if (!result.isConfirmed) return;
 
         const response = await axios.get(`/customer/${id}/pdf`, {
             responseType: 'blob', // PENTING: Agar respon dibaca sebagai file
@@ -25,10 +37,13 @@ const downloadPdf = async (id: number) => {
 
         // Ambil nama file dari header (jika tersedia)
         const contentDisposition = response.headers['content-disposition'];
-        let fileName = `Review_Customer_${id}.pdf`;
+        let fileName = `Data Customer ${nama_perusahaan}.pdf`;
         if (contentDisposition) {
-            const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/);
-            if (fileNameMatch && fileNameMatch.length === 2) fileName = fileNameMatch[1];
+            const fileNameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^;"']+)/i);
+
+            if (fileNameMatch?.[1]) {
+                fileName = decodeURIComponent(fileNameMatch[1].trim());
+            }
         }
 
         link.setAttribute('download', fileName);
@@ -38,10 +53,37 @@ const downloadPdf = async (id: number) => {
         // Cleanup memori
         link.remove();
         window.URL.revokeObjectURL(url);
+        toast.success('PDF berhasil diunduh.');
     } catch (error) {
         console.error('Download Error:', error);
-        alert('Gagal mengunduh PDF. Silakan coba lagi nanti.');
+        toast.error('Gagal mengunduh PDF. Silakan coba lagi nanti.');
     }
+};
+
+const deleteCustomer = async (id: number) => {
+    const result = await Swal.fire({
+        title: 'Hapus Customer?',
+        text: 'Apakah anda yakin ingin menghapus data tersebut?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    router.delete(`/customer/${id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Data berhasil dihapus!');
+        },
+        onError: () => {
+            toast.error('Gagal menghapus data.');
+        },
+    });
 };
 
 export const columns = (): ColumnDef<MasterCustomer>[] => {
@@ -234,27 +276,16 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
                                         </Link>
                                     )}
 
-                                    <DropdownMenuItem onClick={() => customer.id && downloadPdf(customer.id)}>Download PDF</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => customer.id && downloadPdf(customer.id, customer.nama_perusahaan)}>
+                                        Download PDF
+                                    </DropdownMenuItem>
 
                                     {isAdmin && (
                                         <DropdownMenuItem
-                                            className="cursor-pointer text-red-600"
-                                            asChild
-                                            onClick={(e) => {
-                                                const confirmed = window.confirm('Apakah anda yakin ingin menghapus data tersebut?');
-                                                if (!confirmed) {
-                                                    e.preventDefault();
-                                                }
-                                            }}
+                                            className="cursor-pointer text-red-600 focus:text-red-600"
+                                            onClick={() => customer.id && deleteCustomer(customer.id)}
                                         >
-                                            <Link
-                                                href={`/customer/${customer.id}`}
-                                                method="delete"
-                                                as="button"
-                                                onSuccess={() => window.alert('Data berhasil dihapus!')}
-                                            >
-                                                Hapus Customer
-                                            </Link>
+                                            Hapus Customer
                                         </DropdownMenuItem>
                                     )}
                                 </DropdownMenuContent>
@@ -281,7 +312,7 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
                             size="sm"
                             variant="outline"
                             className="w-full justify-center dark:border-white"
-                            onClick={() => customer.id && downloadPdf(customer.id)}
+                            onClick={() => customer.id && downloadPdf(customer.id, customer.nama_perusahaan)}
                         >
                             Download PDF
                         </Button>
@@ -301,7 +332,7 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
                                     href={`/customer/${customer.id}`}
                                     method="delete"
                                     as="button"
-                                    onSuccess={() => window.alert('Data berhasil dihapus!')}
+                                    onSuccess={() => toast.success('Data berhasil dihapus!')}
                                 >
                                     Hapus Customer
                                 </Link>

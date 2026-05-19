@@ -6,6 +6,7 @@ import {
     ContextMenuShortcut,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Toaster } from '@/components/ui/sonner';
 import AppLayoutTemplate from '@/layouts/app/app-sidebar-layout';
 import { type BreadcrumbItem } from '@/types';
 import { ArrowLeft, ArrowRight, Printer, RefreshCw } from 'lucide-react';
@@ -44,44 +45,47 @@ const AppLayout = ({ children, breadcrumbs, ...props }: AppLayoutProps) => {
 
     // 2. Return JSX
     return (
-        <ContextMenu>
-            <ContextMenuTrigger className="min-h-screen w-full">
-                <AppLayoutTemplate breadcrumbs={breadcrumbs} {...props}>
-                    {children}
-                </AppLayoutTemplate>
-            </ContextMenuTrigger>
+        <>
+            <ContextMenu>
+                <ContextMenuTrigger className="min-h-screen w-full">
+                    <AppLayoutTemplate breadcrumbs={breadcrumbs} {...props}>
+                        {children}
+                    </AppLayoutTemplate>
+                </ContextMenuTrigger>
 
-            {/* ISI MENU KLIK KANAN CUSTOM */}
-            <ContextMenuContent className="w-64">
-                <ContextMenuItem inset onClick={() => window.history.back()}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                    <ContextMenuShortcut>Alt+←</ContextMenuShortcut>
-                </ContextMenuItem>
+                {/* ISI MENU KLIK KANAN CUSTOM */}
+                <ContextMenuContent className="w-64">
+                    <ContextMenuItem inset onClick={() => window.history.back()}>
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                        <ContextMenuShortcut>Alt+←</ContextMenuShortcut>
+                    </ContextMenuItem>
 
-                <ContextMenuItem inset onClick={() => window.history.forward()}>
-                    <ArrowRight className="mr-2 h-4 w-4" />
-                    Forward
-                    <ContextMenuShortcut>Alt+→</ContextMenuShortcut>
-                </ContextMenuItem>
+                    <ContextMenuItem inset onClick={() => window.history.forward()}>
+                        <ArrowRight className="mr-2 h-4 w-4" />
+                        Forward
+                        <ContextMenuShortcut>Alt+→</ContextMenuShortcut>
+                    </ContextMenuItem>
 
-                <ContextMenuSeparator />
+                    <ContextMenuSeparator />
 
-                <ContextMenuItem inset onClick={() => window.location.reload()}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Reload
-                    <ContextMenuShortcut>Ctrl+R</ContextMenuShortcut>
-                </ContextMenuItem>
+                    <ContextMenuItem inset onClick={() => window.location.reload()}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Reload
+                        <ContextMenuShortcut>Ctrl+R</ContextMenuShortcut>
+                    </ContextMenuItem>
 
-                <ContextMenuSeparator />
+                    <ContextMenuSeparator />
 
-                <ContextMenuItem inset onClick={() => window.print()}>
-                    <Printer className="mr-2 h-4 w-4" />
-                    Print
-                    <ContextMenuShortcut>Ctrl+P</ContextMenuShortcut>
-                </ContextMenuItem>
-            </ContextMenuContent>
-        </ContextMenu>
+                    <ContextMenuItem inset onClick={() => window.print()}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print
+                        <ContextMenuShortcut>Ctrl+P</ContextMenuShortcut>
+                    </ContextMenuItem>
+                </ContextMenuContent>
+            </ContextMenu>
+            <Toaster richColors position="bottom-right" />
+        </>
     );
 };
 

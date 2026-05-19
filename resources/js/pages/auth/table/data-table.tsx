@@ -18,7 +18,6 @@ import {
     useReactTable,
     VisibilityState,
 } from '@tanstack/react-table';
-import { Eye, EyeOff } from 'lucide-react';
 import * as React from 'react';
 import { DataTableViewOptions } from './data-table-view-options';
 import { DataTablePagination } from './pagination';
@@ -54,10 +53,6 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const [uid, setUid] = React.useState('');
     const [NIK, setNIK] = React.useState('');
     const [email, setEmail] = React.useState('');
-    const [password, setPassword] = React.useState('');
-    const [passwordConfirmation, setPasswordConfirmation] = React.useState('');
-    const [showPassword, setShowPassword] = React.useState(false);
-    const [showPasswordConfirmation, setShowPasswordConfirmation] = React.useState(false);
     const [selectedRole, setSelectedRole] = React.useState<string>('');
     const [selectedCompany, setSelectedCompany] = React.useState<string>('');
     const selectedRoleName = roles.find((role) => String(role.id) === selectedRole)?.name;
@@ -114,15 +109,24 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     }, [filterValue, table]);
 
     const onSubmitCreate = (e: React.FormEvent) => {
+        const onlyNumber = (value: string) => value.replace(/\D/g, '');
         e.preventDefault();
 
-        if (!name || !email || !password || !passwordConfirmation || !selectedRole) {
-            console.error('All fields are required.');
+        if (!name || !email || !NIK || !selectedRole) {
+            console.error('Name, email, NIK, and role are required.');
             return;
         }
 
-        if (password !== passwordConfirmation) {
-            console.error('Password and password confirmation do not match.');
+        const nikOnlyNumber = onlyNumber(NIK);
+        const uidOnlyNumber = onlyNumber(uid);
+
+        if (nikOnlyNumber.length !== 16) {
+            console.error('NIK harus 16 digit angka.');
+            return;
+        }
+
+        if (uidOnlyNumber.length !== 8) {
+            console.error('UID harus 8 digit angka.');
             return;
         }
 
@@ -133,11 +137,9 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
         const data = {
             name,
-            uid: uid || null,
-            NIK: NIK || null,
+            uid: uidOnlyNumber,
+            NIK: nikOnlyNumber,
             email,
-            password,
-            password_confirmation: passwordConfirmation,
             role: selectedRole,
             id_perusahaan: selectedRoleName === 'user' ? Number(selectedCompany) : null,
         };
@@ -149,10 +151,6 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                 setUid('');
                 setNIK('');
                 setEmail('');
-                setPassword('');
-                setPasswordConfirmation('');
-                setShowPassword(false);
-                setShowPasswordConfirmation(false);
                 setSelectedRole('');
                 setSelectedCompany('');
             },
@@ -263,12 +261,8 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                         setUid('');
                         setNIK('');
                         setEmail('');
-                        setPassword('');
-                        setPasswordConfirmation('');
                         setSelectedRole('');
                         setSelectedCompany('');
-                        setShowPassword(false);
-                        setShowPasswordConfirmation(false);
                     }
                 }}
             >
@@ -287,57 +281,29 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter email" />
                         </div>
                         <div>
-                            <Label htmlFor="password">Password</Label>
-                            <div className="relative">
-                                <Input
-                                    id="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Enter password"
-                                    className="pr-10"
-                                />
-
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword((prev) => !prev)}
-                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                                    tabIndex={-1}
-                                >
-                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </div>
-                        <div>
-                            <Label htmlFor="password_confirmation">Confirm Password</Label>
-                            <div className="relative">
-                                <Input
-                                    id="password_confirmation"
-                                    type={showPasswordConfirmation ? 'text' : 'password'}
-                                    value={passwordConfirmation}
-                                    onChange={(e) => setPasswordConfirmation(e.target.value)}
-                                    placeholder="Confirm password"
-                                    className="pr-10"
-                                />
-
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPasswordConfirmation((prev) => !prev)}
-                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                                    tabIndex={-1}
-                                >
-                                    {showPasswordConfirmation ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </div>
-                        <div>
                             <Label htmlFor="uid">UID</Label>
-                            <Input id="uid" value={uid} onChange={(e) => setUid(e.target.value)} placeholder="Enter UID" />
+                            <Input
+                                id="uid"
+                                value={uid}
+                                inputMode="numeric"
+                                maxLength={8}
+                                onChange={(e) => setUid(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                placeholder="Masukkan UID 8 digit"
+                            />
+                            <p className="text-muted-foreground mt-1 text-xs">UID wajib 8 digit angka.</p>
                         </div>
 
                         <div>
                             <Label htmlFor="NIK">NIK</Label>
-                            <Input id="NIK" value={NIK} onChange={(e) => setNIK(e.target.value)} placeholder="Enter NIK" />
+                            <Input
+                                id="NIK"
+                                value={NIK}
+                                inputMode="numeric"
+                                maxLength={16}
+                                onChange={(e) => setNIK(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                                placeholder="Masukkan NIK 16 digit"
+                            />
+                            <p className="text-muted-foreground mt-1 text-xs">NIK wajib 16 digit. Password default memakai 6 digit terakhir NIK.</p>
                         </div>
                         <div>
                             <Label htmlFor="role">Role</Label>
