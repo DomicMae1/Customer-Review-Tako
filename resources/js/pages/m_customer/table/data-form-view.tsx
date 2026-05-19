@@ -142,7 +142,12 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
         let historyData: any = null;
 
-        if (isCreator) {
+        const isManagerOrDirekturApproval =
+            ['manager', 'direktur'].includes(userRole) && (showManagerApprove || showDirekturApprove || showSubmitForDirektur);
+
+        const shouldCheckNpwpBeforeSubmit = isCreator || isManagerOrDirekturApproval;
+
+        if (shouldCheckNpwpBeforeSubmit) {
             try {
                 const res = await axios.post(route('customer.check-npwp'), {
                     no_npwp: customer.no_npwp, // Gunakan data dari prop customer
