@@ -39,11 +39,22 @@ export function ResettableDropzone({
     label,
     isRequired = false,
     existingFile,
-    validation = { accept: { 'application/pdf': ['.pdf'] }, maxSize: 5 * 1024 * 1024 },
+    validation = {
+        accept: {
+            'application/pdf': ['.pdf'],
+            'image/jpeg': ['.jpg', '.jpeg'],
+            'image/png': ['.png'],
+            'image/webp': ['.webp'],
+        },
+        maxSize: 5 * 1024 * 1024,
+    },
     uploadConfig,
 }: ResettableDropzoneProps) {
     const [fileStatus, setFileStatus] = useState<FileStatus | null>(null);
     const [componentKey, setComponentKey] = useState(Date.now());
+    const isImageFile = (fileName?: string) => {
+        return /\.(jpg|jpeg|png|webp)$/i.test(fileName ?? '');
+    };
 
     React.useEffect(() => {
         if (existingFile && existingFile.path) {
@@ -198,7 +209,11 @@ export function ResettableDropzone({
                                 <Trash2Icon className="size-4 text-black" />
                             </Button>
                         )}
-                        <FileIcon className="mb-2 h-10 w-10" />
+                        {fileStatus.status === 'success' && isImageFile(fileStatus.fileName) && fixedPreviewUrl ? (
+                            <img src={fixedPreviewUrl} alt={fileStatus.fileName} className="h-14 w-14 rounded-md object-cover" />
+                        ) : (
+                            <FileIcon className="mb-2 h-10 w-10" />
+                        )}
                         <p className="hidden max-w-full truncate text-sm font-medium md:block">{fileStatus.fileName}</p>
                         {/* STATUS: UPLOADING */}
                         {(fileStatus.status === 'uploading' || fileStatus.status === 'processing') && (
@@ -249,7 +264,7 @@ export function ResettableDropzone({
                 ) : (
                     <div className="flex flex-col items-center gap-2 text-sm text-gray-500 dark:text-white">
                         <CloudUploadIcon className="h-10 w-10" />
-                        <p>Klik atau drag file PDF ke sini</p>
+                        <p>Klik atau drag file PDF/Gambar ke sini</p>
                     </div>
                 )}
             </div>

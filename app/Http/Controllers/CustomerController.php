@@ -800,7 +800,20 @@ class CustomerController extends Controller
         }
 
         $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        $newFileName = "{$npwp}-{$orderString}-{$docType}.{$ext}";
+
+        $isPdf = $ext === 'pdf';
+        $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true);
+
+        if (!$isPdf && !$isImage) {
+            return response()->json([
+                'error' => 'Format file tidak didukung.',
+            ], 422);
+        }
+
+        // Jika image, hasil kompres disimpan sebagai JPG
+        $finalExt = $isImage ? 'jpg' : $ext;
+
+        $newFileName = "{$npwp}-{$orderString}-{$docType}.{$finalExt}";
 
         $subFolder = ($role === 'user') ? 'attachment' : 'customers';
         if (in_array($docType, ['npwp', 'nib', 'sppkp', 'ktp'])) {
@@ -816,7 +829,7 @@ class CustomerController extends Controller
 
         $success = false;
 
-        if ($ext === 'pdf') {
+        if ($isPdf) {
             $localInputName = 'gs_in_' . uniqid() . '.pdf';
             $localOutputName = 'gs_out_' . uniqid() . '.pdf';
 
@@ -834,7 +847,32 @@ class CustomerController extends Controller
             } else {
                 Log::warning("Ghostscript Gagal. Menggunakan file asli.");
             }
+
             @unlink($localInputPath);
+        }
+
+        if ($isImage) {
+            $localInputName = 'img_in_' . uniqid() . '.' . $ext;
+            $localOutputName = 'img_out_' . uniqid() . '.jpg';
+
+            Storage::disk('local')->put("image_processing/{$localInputName}", $disk->get($tempPath));
+
+            $localInputPath = Storage::disk('local')->path("image_processing/{$localInputName}");
+            $localOutputPath = Storage::disk('local')->path("image_processing/{$localOutputName}");
+
+            try {
+                $this->compressImage($localInputPath, $localOutputPath, $mode);
+
+                if (file_exists($localOutputPath) && filesize($localOutputPath) > 0) {
+                    $disk->put($finalRelPath, file_get_contents($localOutputPath));
+                    $success = true;
+                }
+            } catch (\Throwable $e) {
+                Log::error('Gagal kompres image: ' . $e->getMessage());
+            }
+
+            @unlink($localInputPath);
+            @unlink($localOutputPath);
         }
 
         if (!$success) {
@@ -895,6 +933,111 @@ class CustomerController extends Controller
             Log::error("GS Process Exception: " . $e->getMessage());
             return false;
         }
+    }
+
+    private function compressImage(string $inputPath, string $outputPath, string $mode = 'medium'): void
+    {
+        if (!extension_loaded('gd')) {
+            throw new \Exception('PHP GD extension belum aktif.');
+        }
+
+        if (!file_exists($inputPath)) {
+            throw new \Exception('File input image tidak ditemukan.');
+        }
+
+        $beforeSize = filesize($inputPath);
+
+        $quality = match ($mode) {
+            'small' => 55,
+            'medium' => 70,
+            'high' => 85,
+            default => 70,
+        };
+
+        $maxWidth = match ($mode) {
+            'small' => 1200,
+            'medium' => 1600,
+            'high' => 2200,
+            default => 1600,
+        };
+
+        $extension = strtolower(pathinfo($inputPath, PATHINFO_EXTENSION));
+
+        $sourceImage = match ($extension) {
+            'jpg', 'jpeg' => imagecreatefromjpeg($inputPath),
+            'png' => imagecreatefrompng($inputPath),
+            'webp' => imagecreatefromwebp($inputPath),
+            default => false,
+        };
+
+        if (!$sourceImage) {
+            throw new \Exception('Format image tidak didukung atau file image rusak.');
+        }
+
+        $originalWidth = imagesx($sourceImage);
+        $originalHeight = imagesy($sourceImage);
+
+        if ($originalWidth <= 0 || $originalHeight <= 0) {
+            imagedestroy($sourceImage);
+            throw new \Exception('Ukuran image tidak valid.');
+        }
+
+        if ($originalWidth > $maxWidth) {
+            $newWidth = $maxWidth;
+            $newHeight = (int) round(($originalHeight / $originalWidth) * $newWidth);
+        } else {
+            $newWidth = $originalWidth;
+            $newHeight = $originalHeight;
+        }
+
+        $newImage = imagecreatetruecolor($newWidth, $newHeight);
+
+        // Background putih agar PNG transparan aman saat dikonversi ke JPG
+        $white = imagecolorallocate($newImage, 255, 255, 255);
+        imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $white);
+
+        imagecopyresampled(
+            $newImage,
+            $sourceImage,
+            0,
+            0,
+            0,
+            0,
+            $newWidth,
+            $newHeight,
+            $originalWidth,
+            $originalHeight
+        );
+
+        $saved = imagejpeg($newImage, $outputPath, $quality);
+
+        imagedestroy($sourceImage);
+        imagedestroy($newImage);
+
+        if (!$saved || !file_exists($outputPath) || filesize($outputPath) <= 0) {
+            throw new \Exception('Gagal menyimpan hasil kompres image.');
+        }
+
+        $afterSize = filesize($outputPath);
+
+        Log::info('Image compression result', [
+            'input_path' => $inputPath,
+            'output_path' => $outputPath,
+            'mode' => $mode,
+            'quality' => $quality,
+            'max_width' => $maxWidth,
+            'original_width' => $originalWidth,
+            'original_height' => $originalHeight,
+            'new_width' => $newWidth,
+            'new_height' => $newHeight,
+            'before_size_kb' => round($beforeSize / 1024, 2),
+            'after_size_kb' => round($afterSize / 1024, 2),
+            'saved_kb' => round(($beforeSize - $afterSize) / 1024, 2),
+            'saved_percent' => $beforeSize > 0
+                ? round((($beforeSize - $afterSize) / $beforeSize) * 100, 2)
+                : 0,
+            'compressed_success' => $afterSize > 0 && $afterSize < $beforeSize,
+        ]);
     }
 
     /**
