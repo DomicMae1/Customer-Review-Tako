@@ -1,5 +1,5 @@
 # Gunakan image PHP dengan Apache built-in (lebih stabil untuk production)
-FROM php:8.2-apache
+FROM php:8.3-apache
 
 # Install dependencies sistem dan ekstensi PHP yang dibutuhkan
 RUN apt-get update && apt-get install -y \
