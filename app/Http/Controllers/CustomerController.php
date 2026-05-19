@@ -14,13 +14,15 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Exceptions\UnauthorizedException;
-use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Clegginabox\PDFMerger\PDFMerger;
 use Illuminate\Support\Str;
 use Spatie\Browsershot\Browsershot;
 use Symfony\Component\Process\Process;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class CustomerController extends Controller
 {
@@ -1225,5 +1227,70 @@ class CustomerController extends Controller
             'auditor_by' => $status->status_4_by ?? null,
             'auditor_raw_path' => $status->status_4_path ?? null,
         ]);
+    }
+
+    private function sendCustomerToExternalApi(Customer $customer, User $user, ?string $uidMarketingOverride = null): void
+    {
+        $url = config('services.external_customer.url');
+        $token = config('services.external_customer.token');
+
+        if (!$url || !$token) {
+            Log::warning('External customer API belum dikonfigurasi.');
+            return;
+        }
+
+        $perusahaan = Perusahaan::find($customer->id_perusahaan);
+
+        if (!$perusahaan) {
+            Log::warning('Perusahaan tidak ditemukan untuk external customer API.', [
+                'customer_id' => $customer->id,
+                'id_perusahaan' => $customer->id_perusahaan,
+            ]);
+
+            return;
+        }
+
+        $payload = [
+            'uid_perusahaan' => $perusahaan->uid,
+            'uid_marketing' => $uidMarketingOverride ?? $user->uid ?? '',
+            'uid' => $customer->uid,
+            'nama_perusahaan' => $customer->nama_perusahaan,
+            'type' => 'external',
+            'email' => $customer->email,
+            'nama' => $customer->nama_personal,
+            'no_npwp' => preg_replace('/\D/', '', $customer->no_npwp ?? ''),
+            'no_npwp_16' => preg_replace('/\D/', '', $customer->no_npwp_16 ?? ''),
+        ];
+
+        try {
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->asJson()
+                ->timeout(15)
+                ->post($url, $payload);
+
+            if ($response->failed()) {
+                Log::error('Gagal kirim customer ke external API.', [
+                    'customer_id' => $customer->id,
+                    'status' => $response->status(),
+                    'response' => $response->body(),
+                    'payload' => $payload,
+                ]);
+
+                return;
+            }
+
+            Log::info('Berhasil kirim customer ke external API.', [
+                'customer_id' => $customer->id,
+                'status' => $response->status(),
+                'response' => $response->json(),
+            ]);
+        } catch (\Throwable $th) {
+            Log::error('Error saat kirim customer ke external API.', [
+                'customer_id' => $customer->id,
+                'error' => $th->getMessage(),
+                'payload' => $payload,
+            ]);
+        }
     }
 }
