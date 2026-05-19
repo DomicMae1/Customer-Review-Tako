@@ -33,7 +33,7 @@ export default function PublicCustomerForm({
     onSuccess?: () => void;
     isFilled?: boolean;
 }) {
-    const { customer_name, token, user_id, id_perusahaan, company } = usePage().props as unknown as {
+    const { customer_name, token, user_id, id_perusahaan, company, attachmentRules } = usePage().props as unknown as {
         customer_name: string;
         token: string;
         user_id: number;
@@ -43,6 +43,19 @@ export default function PublicCustomerForm({
             name?: string;
             logo?: string | null;
         };
+        attachmentRules?: {
+            is_npwp: boolean;
+            is_nib: boolean;
+            is_sptkp: boolean;
+            is_ktp: boolean;
+        };
+    };
+
+    const rules = attachmentRules ?? {
+        is_npwp: true,
+        is_nib: true,
+        is_sptkp: false,
+        is_ktp: true,
     };
 
     const companyLogo = company?.logo ? (company.logo.startsWith('http') ? company.logo : `/storage/${company.logo}`) : null;
@@ -363,19 +376,25 @@ export default function PublicCustomerForm({
             return customer?.attachments?.some((a) => a.type === type);
         };
 
-        if (!getFileStatus(npwpFile, 'npwp')) {
+        if (rules.is_npwp && !getFileStatus(npwpFile, 'npwp')) {
             toast.error('Dokumen NPWP wajib diunggah.');
             setIsLoading(false);
             return;
         }
 
-        if (!isCustomerPerorangan && !getFileStatus(nibFile, 'nib')) {
+        if (rules.is_nib && !isCustomerPerorangan && !getFileStatus(nibFile, 'nib')) {
             toast.error('Dokumen NIB wajib diunggah.');
             setIsLoading(false);
             return;
         }
 
-        if (!getFileStatus(ktpFile, 'ktp')) {
+        if (rules.is_sptkp && !getFileStatus(sppkpFile, 'sppkp')) {
+            toast.error('Dokumen SPTKP wajib diunggah.');
+            setIsLoading(false);
+            return;
+        }
+
+        if (rules.is_ktp && !getFileStatus(ktpFile, 'ktp')) {
             toast.error('Dokumen KTP wajib diunggah.');
             setIsLoading(false);
             return;
@@ -847,7 +866,7 @@ export default function PublicCustomerForm({
                                         <div className="w-full">
                                             <ResettableDropzone
                                                 label="Upload NPWP"
-                                                isRequired={true}
+                                                isRequired={rules.is_npwp}
                                                 uploadConfig={{
                                                     url: '/customer/upload-temp', // Endpoint upload raw
                                                     payload: {
@@ -860,14 +879,14 @@ export default function PublicCustomerForm({
                                                 onFileChange={(file, response) => handleUploadSuccess('npwp', file, response)}
                                                 existingFile={customer?.attachments?.find((a) => a.type === 'npwp')}
                                             />
-                                            <p className="mt-1 text-xs text-red-500">* Wajib unggah NPWP dalam format PDF</p>
+                                            {rules.is_npwp && <p className="mt-1 text-xs text-red-500">* Wajib unggah NPWP dalam format PDF</p>}
                                         </div>
 
                                         {/* NIB */}
                                         <div className="w-full">
                                             <ResettableDropzone
                                                 label="Upload NIB"
-                                                isRequired={data.bentuk_badan_usaha !== 'Customer Perorangan'}
+                                                isRequired={rules.is_nib && data.bentuk_badan_usaha !== 'Customer Perorangan'}
                                                 uploadConfig={{
                                                     url: '/customer/upload-temp',
                                                     payload: {
@@ -880,15 +899,16 @@ export default function PublicCustomerForm({
                                                 onFileChange={(file, response) => handleUploadSuccess('nib', file, response)}
                                                 existingFile={customer?.attachments?.find((a) => a.type === 'nib')}
                                             />
-                                            <p className="mt-1 text-xs text-red-500">
-                                                {data.bentuk_badan_usaha === 'Customer Perorangan' ? '' : '* Wajib unggah NIB dalam format PDF'}
-                                            </p>
+                                            {rules.is_nib && data.bentuk_badan_usaha !== 'Customer Perorangan' && (
+                                                <p className="mt-1 text-xs text-red-500">* Wajib unggah NIB dalam format PDF</p>
+                                            )}
                                         </div>
 
                                         {/* SPTKP */}
                                         <div className="w-full">
                                             <ResettableDropzone
                                                 label="Upload SPTKP"
+                                                isRequired={rules.is_sptkp}
                                                 uploadConfig={{
                                                     url: '/customer/upload-temp',
                                                     payload: {
@@ -901,13 +921,14 @@ export default function PublicCustomerForm({
                                                 onFileChange={(file, response) => handleUploadSuccess('sppkp', file, response)}
                                                 existingFile={customer?.attachments?.find((a) => a.type === 'sppkp')}
                                             />
+                                            {rules.is_sptkp && <p className="mt-1 text-xs text-red-500">* Wajib unggah SPTKP dalam format PDF</p>}
                                         </div>
 
                                         {/* KTP */}
                                         <div className="w-full">
                                             <ResettableDropzone
                                                 label="Upload KTP"
-                                                isRequired={true}
+                                                isRequired={rules.is_ktp}
                                                 uploadConfig={{
                                                     url: '/customer/upload-temp',
                                                     payload: {
@@ -920,7 +941,7 @@ export default function PublicCustomerForm({
                                                 onFileChange={(file, response) => handleUploadSuccess('ktp', file, response)}
                                                 existingFile={customer?.attachments?.find((a) => a.type === 'ktp')}
                                             />
-                                            <p className="mt-1 text-xs text-red-500">* Wajib unggah KTP dalam format PDF</p>
+                                            {rules.is_ktp && <p className="mt-1 text-xs text-red-500">* Wajib unggah KTP dalam format PDF</p>}
                                         </div>
                                     </div>
                                 </div>

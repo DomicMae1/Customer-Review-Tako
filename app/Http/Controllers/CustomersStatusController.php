@@ -102,6 +102,20 @@ class CustomersStatusController extends Controller
         //
     }
 
+    private function nullableInt($value): ?int
+    {
+        if (
+            $value === null ||
+            $value === '' ||
+            $value === 'null' ||
+            $value === 'undefined'
+        ) {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
     public function submit(Request $request)
     {
 
@@ -164,6 +178,9 @@ class CustomersStatusController extends Controller
 
         $triggerRoles = ['user', 'manager', 'direktur'];
 
+        $problematicCustomer = null;
+        $problematicStatus = null;
+
         // Cek apakah User yang submit termasuk role tersebut
         if (in_array($role, $triggerRoles)) {
 
@@ -201,6 +218,8 @@ class CustomersStatusController extends Controller
                     break;
                 }
             }
+
+            $problematicStatus = $problematicCustomer?->status;
 
             // Jika ditemukan data lama yang bermasalah, KIRIM EMAIL
             if ($problematicCustomer) {
@@ -385,34 +404,61 @@ class CustomersStatusController extends Controller
         }
 
         if ($request->filled('status_3') && $role !== 'lawyer') {
-            $status->status_3 = $request->input('status_3'); 
-            $status->status_3_by = $request->input('status_3_by');
-            
+            $status->status_3 = $request->input('status_3');
+
+            $status->status_3_by =
+                $problematicStatus?->status_3_by
+                ?? $this->nullableInt($request->input('status_3_by'));
+
+            if ($problematicStatus?->status_3_timestamps) {
+                $status->status_3_timestamps = $problematicStatus->status_3_timestamps;
+            } else {
+                $status->status_3_timestamps = $now;
+            }
+
             if ($request->filled('status_3_keterangan')) {
                 $status->status_3_keterangan = $request->input('status_3_keterangan');
+            } elseif ($problematicStatus?->status_3_keterangan) {
+                $status->status_3_keterangan = $problematicStatus->status_3_keterangan;
             }
-            
+
             if ($request->filled('submit_3_path')) {
                 $status->submit_3_path = $request->input('submit_3_path');
-                $status->submit_3_nama_file = basename($request->input('submit_3_path')); 
+                $status->submit_3_nama_file = basename($request->input('submit_3_path'));
+            } elseif ($problematicStatus?->submit_3_path) {
+                $status->submit_3_path = $problematicStatus->submit_3_path;
+                $status->submit_3_nama_file = $problematicStatus->submit_3_nama_file;
             }
-
-            $status->status_3_timestamps = $now; 
         }
 
-        if (($request->filled('status_4_keterangan') || $request->filled('status_4_path')) && $role !== 'auditor') {
-            $status->status_4_by = $request->input('status_4_by');
+        if (($request->filled('status_4_keterangan') || $request->filled('status_4_path') || $problematicStatus?->status_4_keterangan) && $role !== 'auditor') {
+            $status->status_4_by =
+                $problematicStatus?->status_4_by
+                ?? $this->nullableInt($request->input('status_4_by'));
+
             if ($request->filled('status_4_keterangan')) {
                 $status->status_4_keterangan = $request->input('status_4_keterangan');
+            } elseif ($problematicStatus?->status_4_keterangan) {
+                $status->status_4_keterangan = $problematicStatus->status_4_keterangan;
             }
 
             if ($request->filled('status_4_path')) {
                 $status->status_4_path = $request->input('status_4_path');
                 $status->status_4_nama_file = basename($request->input('status_4_path'));
+            } elseif ($problematicStatus?->status_4_path) {
+                $status->status_4_path = $problematicStatus->status_4_path;
+                $status->status_4_nama_file = $problematicStatus->status_4_nama_file;
             }
 
-            $status->status_4_timestamps = $now;
+            $status->status_4_timestamps = $problematicStatus?->status_4_timestamps ?? $now;
         }
+
+        Log::info('Submit payload check', [
+            'id_perusahaan' => $request->input('id_perusahaan'),
+            'status_3_by' => $request->input('status_3_by'),
+            'status_4_by' => $request->input('status_4_by'),
+            'customer_id' => $request->input('customer_id'),
+        ]);
 
         $status->save();
 

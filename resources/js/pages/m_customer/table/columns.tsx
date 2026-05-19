@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { MasterCustomer } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
 import axios from 'axios';
 import { MoreHorizontal } from 'lucide-react';
@@ -58,6 +58,32 @@ const downloadPdf = async (id: number, nama_perusahaan: string) => {
         console.error('Download Error:', error);
         toast.error('Gagal mengunduh PDF. Silakan coba lagi nanti.');
     }
+};
+
+const deleteCustomer = async (id: number) => {
+    const result = await Swal.fire({
+        title: 'Hapus Customer?',
+        text: 'Apakah anda yakin ingin menghapus data tersebut?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    router.delete(`/customer/${id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Data berhasil dihapus!');
+        },
+        onError: () => {
+            toast.error('Gagal menghapus data.');
+        },
+    });
 };
 
 export const columns = (): ColumnDef<MasterCustomer>[] => {
@@ -256,23 +282,10 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
 
                                     {isAdmin && (
                                         <DropdownMenuItem
-                                            className="cursor-pointer text-red-600"
-                                            asChild
-                                            onClick={(e) => {
-                                                const confirmed = window.confirm('Apakah anda yakin ingin menghapus data tersebut?');
-                                                if (!confirmed) {
-                                                    e.preventDefault();
-                                                }
-                                            }}
+                                            className="cursor-pointer text-red-600 focus:text-red-600"
+                                            onClick={() => customer.id && deleteCustomer(customer.id)}
                                         >
-                                            <Link
-                                                href={`/customer/${customer.id}`}
-                                                method="delete"
-                                                as="button"
-                                                onSuccess={() => toast.success('Data berhasil dihapus!')}
-                                            >
-                                                Hapus Customer
-                                            </Link>
+                                            Hapus Customer
                                         </DropdownMenuItem>
                                     )}
                                 </DropdownMenuContent>

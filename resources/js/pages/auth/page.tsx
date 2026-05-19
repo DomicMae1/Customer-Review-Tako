@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { Role, User, type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import Swal from 'sweetalert2';
@@ -39,13 +38,10 @@ export default function ManageUsers() {
     const [userIdToEdit, setUserIdToEdit] = useState<number | null>(null);
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
-    const [editPassword, setEditPassword] = useState('');
     const [editUid, setEditUid] = useState('');
     const [editNIK, setEditNIK] = useState('');
     const [editRole, setEditRole] = useState<string>('');
     const [editCompany, setEditCompany] = useState<string>('');
-
-    const [showEditPassword, setShowEditPassword] = useState(false);
 
     const selectedEditRoleName = roles.find((role) => String(role.id) === editRole)?.name;
 
@@ -60,7 +56,6 @@ export default function ManageUsers() {
             setEditUid(user.uid ?? '');
             setEditNIK(user.NIK ?? '');
             setEditEmail(user.email);
-            setEditPassword('');
             setEditRole(user.roles && user.roles.length > 0 ? String(user.roles[0].id) : '');
             setEditCompany(user.id_perusahaan ? String(user.id_perusahaan) : '');
             setOpenEdit(true);
@@ -88,6 +83,8 @@ export default function ManageUsers() {
         }
     };
 
+    const onlyNumber = (value: string) => value.replace(/\D/g, '');
+
     const onConfirmEdit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -101,18 +98,27 @@ export default function ManageUsers() {
             return;
         }
 
+        const uidOnlyNumber = onlyNumber(editUid);
+        const nikOnlyNumber = onlyNumber(editNIK);
+
+        if (uidOnlyNumber.length !== 8) {
+            toast.error('UID harus 8 digit angka.');
+            return;
+        }
+
+        if (nikOnlyNumber.length !== 16) {
+            toast.error('NIK harus 16 digit angka.');
+            return;
+        }
+
         const data: any = {
             name: editName,
-            uid: editUid || null,
-            NIK: editNIK || null,
+            uid: uidOnlyNumber,
+            NIK: nikOnlyNumber,
             email: editEmail,
             role: editRole,
             id_perusahaan: selectedEditRoleName === 'user' ? editCompany : null,
         };
-
-        if (editPassword.trim()) {
-            data.password = editPassword;
-        }
 
         if (userIdToEdit !== null) {
             router.put(`/users/${userIdToEdit}`, data, {
@@ -123,20 +129,15 @@ export default function ManageUsers() {
                     setEditUid('');
                     setEditNIK('');
                     setEditEmail('');
-                    setEditPassword('');
                     setEditRole('');
                     setEditCompany('');
                     toast.success('User updated successfully!');
                 },
                 onError: (errors) => {
                     console.error('❌ Error saat mengedit user:', errors);
-                    if (errors.email) {
-                        toast.error('Email error: ' + errors.email);
-                    } else if (errors.role) {
-                        toast.error('Role error: ' + errors.role);
-                    } else {
-                        toast.error('Failed to update user.');
-                    }
+
+                    const firstError = Object.values(errors)[0];
+                    toast.error(String(firstError ?? 'Failed to update user.'));
                 },
             });
         }
@@ -213,7 +214,6 @@ export default function ManageUsers() {
                         setEditEmail('');
                         setEditRole('');
                         setEditCompany('');
-                        setShowEditPassword(false);
                     }
                 }}
             >
@@ -238,35 +238,29 @@ export default function ManageUsers() {
                             />
                         </div>
                         <div>
-                            <Label htmlFor="edit_password">Password Baru</Label>
-                            <div className="relative">
-                                <Input
-                                    id="edit_password"
-                                    type={showEditPassword ? 'text' : 'password'}
-                                    value={editPassword}
-                                    onChange={(e) => setEditPassword(e.target.value)}
-                                    placeholder="Kosongkan jika tidak ingin mengubah password"
-                                    className="pr-10"
-                                />
-
-                                <button
-                                    type="button"
-                                    onClick={() => setShowEditPassword((prev) => !prev)}
-                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                                    tabIndex={-1}
-                                >
-                                    {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </div>
-                        <div>
                             <Label htmlFor="edit_uid">UID</Label>
-                            <Input id="edit_uid" value={editUid} onChange={(e) => setEditUid(e.target.value)} placeholder="Enter UID" />
+                            <Input
+                                id="edit_uid"
+                                value={editUid}
+                                inputMode="numeric"
+                                maxLength={8}
+                                onChange={(e) => setEditUid(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                placeholder="Masukkan UID 8 digit"
+                            />
+                            <p className="text-muted-foreground mt-1 text-xs">UID wajib 8 digit angka.</p>
                         </div>
 
                         <div>
                             <Label htmlFor="edit_NIK">NIK</Label>
-                            <Input id="edit_NIK" value={editNIK} onChange={(e) => setEditNIK(e.target.value)} placeholder="Enter NIK" />
+                            <Input
+                                id="edit_NIK"
+                                value={editNIK}
+                                inputMode="numeric"
+                                maxLength={16}
+                                onChange={(e) => setEditNIK(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                                placeholder="Masukkan NIK 16 digit"
+                            />
+                            <p className="text-muted-foreground mt-1 text-xs">NIK wajib 16 digit angka.</p>
                         </div>
                         <div>
                             <Label htmlFor="edit_role">Role</Label>

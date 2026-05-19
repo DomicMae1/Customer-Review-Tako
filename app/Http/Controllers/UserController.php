@@ -53,31 +53,34 @@ class UserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'NIK' => 'nullable|string|max:255',
-            'uid' => 'nullable|string|max:255|unique:users,uid',
+            'NIK' => ['required', 'digits:16'],
+            'uid' => ['required', 'digits:8', 'unique:users,uid'],
             'email' => 'required|string|lowercase|email|max:255|unique:' . User::class,
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|exists:roles,id',
             'id_perusahaan' => 'nullable|exists:perusahaan,id',
         ]);
 
+        $defaultPassword = substr($validated['NIK'], -8);
+
         $user = User::create([
-            'name' => $request->name,
-            'NIK' => $request->NIK,
-            'uid' => $request->uid,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'id_perusahaan' => $request->id_perusahaan,
+            'name' => $validated['name'],
+            'NIK' => $validated['NIK'],
+            'uid' => $validated['uid'],
+            'email' => $validated['email'],
+            'password' => Hash::make($defaultPassword),
+            'id_perusahaan' => $validated['id_perusahaan'] ?? null,
         ]);
 
-        Log::info('Request Data:', $request->all());
+        Log::info('Request Data:', $request->except(['password', 'password_confirmation']));
 
-        $role = Role::find($request->role);
+        $role = Role::findOrFail($validated['role']);
         $user->assignRole($role);
 
-        return redirect()->route('users.index')->with('message', 'User created successfully.');
+        return redirect()
+            ->route('users.index')
+            ->with('message', 'User created successfully.');
     }
 
     /**
@@ -101,32 +104,37 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'uid' => 'nullable|string|max:255|unique:users,uid,' . $user->id,
-            'NIK' => 'nullable|string|max:255|unique:users,NIK,' . $user->id,
+            'uid' => ['required', 'digits:8', 'unique:users,uid,' . $user->id],
+            'NIK' => ['required', 'digits:16', 'unique:users,NIK,' . $user->id],
             'email' => 'required|string|lowercase|email|max:255|unique:users,email,' . $user->id,
-            'password' => ['nullable', Rules\Password::defaults()],
             'role' => 'required|exists:roles,id',
             'id_perusahaan' => 'nullable|exists:perusahaan,id',
         ]);
 
         try {
             $data = [
-                'name' => $request->name,
-                'uid' => $request->uid,
-                'NIK' => $request->NIK,
-                'email' => $request->email,
+                'name' => $validated['name'],
+                'uid' => $validated['uid'],
+                'NIK' => $validated['NIK'],
+                'email' => $validated['email'],
             ];
 
-            if ($request->filled('password')) {
-                $data['password'] = Hash::make($request->password);
+            /*
+            * Jika NIK berubah, password otomatis diganti
+            * menjadi 8 digit terakhir dari NIK baru.
+            */
+            if ($user->NIK !== $validated['NIK']) {
+                $defaultPassword = substr($validated['NIK'], -8);
+
+                $data['password'] = Hash::make($defaultPassword);
             }
 
-            $role = Role::findOrFail($request->role);
+            $role = Role::findOrFail($validated['role']);
 
             if ($role->name === 'user') {
-                $data['id_perusahaan'] = $request->id_perusahaan;
+                $data['id_perusahaan'] = $validated['id_perusahaan'];
             } else {
                 $data['id_perusahaan'] = null;
             }
