@@ -264,11 +264,55 @@ class CustomerController extends Controller
             throw UnauthorizedException::forPermissions(['create-master-customer']);
         }
 
+        $companies = collect();
+
+        if ($user->hasRole(['manager', 'direktur'])) {
+            $companies = $user->companies()
+                ->select(
+                    'perusahaan.id',
+                    'perusahaan.nama_perusahaan',
+                    'perusahaan.is_npwp',
+                    'perusahaan.is_nib',
+                    'perusahaan.is_sptkp',
+                    'perusahaan.is_ktp'
+                )
+                ->get();
+        } elseif (!empty($user->id_perusahaan)) {
+            $companies = Perusahaan::where('id', $user->id_perusahaan)
+                ->select(
+                    'id',
+                    'nama_perusahaan',
+                    'is_npwp',
+                    'is_nib',
+                    'is_sptkp',
+                    'is_ktp'
+                )
+                ->get();
+        }
+
+        $defaultCompany = $companies->first();
+
         return Inertia::render('m_customer/table/add-data-form', [
+            'companies' => $companies->map(fn ($company) => [
+                'id' => $company->id,
+                'nama_perusahaan' => $company->nama_perusahaan,
+                'is_npwp' => (bool) $company->is_npwp,
+                'is_nib' => (bool) $company->is_nib,
+                'is_sptkp' => (bool) $company->is_sptkp,
+                'is_ktp' => (bool) $company->is_ktp,
+            ])->values(),
+
+            'attachmentRules' => [
+                'is_npwp' => (bool) ($defaultCompany?->is_npwp ?? true),
+                'is_nib' => (bool) ($defaultCompany?->is_nib ?? true),
+                'is_sptkp' => (bool) ($defaultCompany?->is_sptkp ?? false),
+                'is_ktp' => (bool) ($defaultCompany?->is_ktp ?? true),
+            ],
+
             'flash' => [
                 'success' => session('success'),
-                'error' => session('error')
-            ]
+                'error' => session('error'),
+            ],
         ]);
     }
 
@@ -302,7 +346,29 @@ class CustomerController extends Controller
             throw UnauthorizedException::forPermissions(['create-master-customer']);
         }
 
-        DB::beginTransaction();
+        $roles = $user->getRoleNames();
+
+        if ($roles->contains('user')) {
+            $idPerusahaan = $user->id_perusahaan;
+        } elseif ($roles->contains('manager') || $roles->contains('direktur')) {
+            $idPerusahaan = $request->id_perusahaan;
+        } else {
+            $idPerusahaan = $user->id_perusahaan;
+        }
+
+        if (!$idPerusahaan) {
+            return redirect()
+                ->back()
+                ->withErrors(['id_perusahaan' => 'Perusahaan wajib dipilih.']);
+        }
+
+        $perusahaan = Perusahaan::find($idPerusahaan);
+
+        if (!$perusahaan) {
+            return redirect()
+                ->back()
+                ->withErrors(['id_perusahaan' => 'Perusahaan tidak ditemukan.']);
+        }
 
         $validated = $request->validate([
             'kategori_usaha' => 'required|string',
@@ -337,21 +403,44 @@ class CustomerController extends Controller
             'tgl_approval_2' => 'nullable|date',
             'tgl_customer' => 'nullable|date',
 
-            'attachments' => 'required|array',
-            'attachments.*.nama_file' => 'required|string',
-            'attachments.*.path' => 'required|string',
-            'attachments.*.type' => 'required|in:npwp,sppkp,ktp,nib',
+            'attachments' => 'nullable|array',
+            'attachments.*.nama_file' => 'required_with:attachments|string',
+            'attachments.*.path' => 'required_with:attachments|string',
+            'attachments.*.type' => 'required_with:attachments|in:npwp,sppkp,ktp,nib',
         ]);
 
+        $attachmentTypes = collect($validated['attachments'] ?? [])
+            ->pluck('type')
+            ->toArray();
+
+        $isCustomerPerorangan = $request->bentuk_badan_usaha === 'Customer Perorangan';
+
+        if ($perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
+            return redirect()
+                ->back()
+                ->withErrors(['attachments' => 'Dokumen NPWP wajib diunggah.']);
+        }
+
+        if ($perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
+            return redirect()
+                ->back()
+                ->withErrors(['attachments' => 'Dokumen NIB wajib diunggah.']);
+        }
+
+        if ($perusahaan->is_sptkp && !in_array('sppkp', $attachmentTypes, true)) {
+            return redirect()
+                ->back()
+                ->withErrors(['attachments' => 'Dokumen SPTKP wajib diunggah.']);
+        }
+
+        if ($perusahaan->is_ktp && !in_array('ktp', $attachmentTypes, true)) {
+            return redirect()
+                ->back()
+                ->withErrors(['attachments' => 'Dokumen KTP wajib diunggah.']);
+        }
 
         try {
-            $roles = $user->getRoleNames();
-
-            if ($roles->contains('user')) {
-                $idPerusahaan = $user->id_perusahaan;
-            } elseif ($roles->contains('manager') || $roles->contains('direktur')) {
-                $idPerusahaan = $request->id_perusahaan;
-            }
+            DB::beginTransaction();
 
             $customer = Customer::create(array_merge($validated, [
                 'id_user' => $user->id,
@@ -359,14 +448,13 @@ class CustomerController extends Controller
             ]));
 
             if (!empty($validated['attachments'])) {
-
                 foreach ($validated['attachments'] as $attachment) {
                     if (!str_starts_with($attachment['path'], 'blob:')) {
                         CustomerAttach::create([
                             'customer_id' => $customer->id,
-                            'nama_file'   => $attachment['nama_file'],
-                            'path'        => $attachment['path'],
-                            'type'        => $attachment['type'],
+                            'nama_file' => $attachment['nama_file'],
+                            'path' => $attachment['path'],
+                            'type' => $attachment['type'],
                         ]);
                     }
                 }
@@ -390,54 +478,16 @@ class CustomerController extends Controller
             return Inertia::location(route('customer.show', $customer->id));
         } catch (\Throwable $th) {
             DB::rollBack();
-            return redirect()->back()->withErrors(['error' => 'Terjadi kesalahan: ' . $th->getMessage()]);
+
+            return redirect()
+                ->back()
+                ->withErrors(['error' => 'Terjadi kesalahan: ' . $th->getMessage()]);
         }
     }
 
     public function storePublic(Request $request)
     {
-
         DB::beginTransaction();
-
-        $validated = $request->validate([
-            'kategori_usaha' => 'required|string',
-            'nama_perusahaan' => 'required|string',
-            'bentuk_badan_usaha' => 'required|string',
-            'alamat_lengkap' => 'required|string',
-            'kota' => 'required|string',
-            'no_telp' => 'nullable|string',
-            'no_fax' => 'nullable|string',
-            'alamat_penagihan' => 'required|string',
-            'email' => 'required|email',
-            'website' => 'nullable|string',
-            'top' => 'nullable|string',
-            'status_perpajakan' => 'nullable|string',
-            'no_npwp' => 'nullable|string',
-            'no_npwp_16' => 'nullable|string',
-            'nama_pj' => 'nullable|string',
-            'no_ktp_pj' => 'nullable|string',
-            'no_telp_pj' => 'nullable|string',
-            'nama_personal' => 'nullable|string',
-            'jabatan_personal' => 'nullable|string',
-            'no_telp_personal' => 'nullable|string',
-            'email_personal' => 'nullable|email',
-            'keterangan_reject' => 'nullable|string',
-            'user_id' => 'required|exists:users,id',
-            'approved_1_by' => 'nullable|integer',
-            'approved_2_by' => 'nullable|integer',
-            'rejected_1_by' => 'nullable|integer',
-            'rejected_2_by' => 'nullable|integer',
-            'keterangan' => 'nullable|string',
-            'tgl_approval_1' => 'nullable|date',
-            'tgl_approval_2' => 'nullable|date',
-            'tgl_customer' => 'nullable|date',
-
-            'attachments' => 'required|array',
-            'attachments.*.nama_file' => 'required|string',
-            'attachments.*.path' => 'required|string',
-            'attachments.*.type' => 'required|in:npwp,sppkp,ktp,nib',
-        ]);
-
 
         try {
             $userId = $request->input('user_id');
@@ -455,21 +505,94 @@ class CustomerController extends Controller
 
             $id_perusahaan = $link->id_perusahaan;
 
+            $perusahaan = Perusahaan::find($id_perusahaan);
+
+            if (!$perusahaan) {
+                throw new \Exception('Perusahaan tidak ditemukan.');
+            }
+
+            $validated = $request->validate([
+                'kategori_usaha' => 'required|string',
+                'nama_perusahaan' => 'required|string',
+                'bentuk_badan_usaha' => 'required|string',
+                'alamat_lengkap' => 'required|string',
+                'kota' => 'required|string',
+                'no_telp' => 'nullable|string',
+                'no_fax' => 'nullable|string',
+                'alamat_penagihan' => 'required|string',
+                'email' => 'required|email',
+                'website' => 'nullable|string',
+                'top' => 'nullable|string',
+                'status_perpajakan' => 'nullable|string',
+                'no_npwp' => 'nullable|string',
+                'no_npwp_16' => 'nullable|string',
+                'nama_pj' => 'nullable|string',
+                'no_ktp_pj' => 'nullable|string',
+                'no_telp_pj' => 'nullable|string',
+                'nama_personal' => 'nullable|string',
+                'jabatan_personal' => 'nullable|string',
+                'no_telp_personal' => 'nullable|string',
+                'email_personal' => 'nullable|email',
+                'keterangan_reject' => 'nullable|string',
+                'user_id' => 'required|exists:users,id',
+                'approved_1_by' => 'nullable|integer',
+                'approved_2_by' => 'nullable|integer',
+                'rejected_1_by' => 'nullable|integer',
+                'rejected_2_by' => 'nullable|integer',
+                'keterangan' => 'nullable|string',
+                'tgl_approval_1' => 'nullable|date',
+                'tgl_approval_2' => 'nullable|date',
+                'tgl_customer' => 'nullable|date',
+
+                'attachments' => 'nullable|array',
+                'attachments.*.nama_file' => 'required_with:attachments|string',
+                'attachments.*.path' => 'required_with:attachments|string',
+                'attachments.*.type' => 'required_with:attachments|in:npwp,sppkp,ktp,nib',
+            ]);
+
+            $attachmentTypes = collect($validated['attachments'] ?? [])
+                ->pluck('type')
+                ->toArray();
+
+            $isCustomerPerorangan = $request->bentuk_badan_usaha === 'Customer Perorangan';
+
+            if ($perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
+                return response()->json([
+                    'error' => 'Dokumen NPWP wajib diunggah.',
+                ], 422);
+            }
+
+            if ($perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
+                return response()->json([
+                    'error' => 'Dokumen NIB wajib diunggah.',
+                ], 422);
+            }
+
+            if ($perusahaan->is_sptkp && !in_array('sppkp', $attachmentTypes, true)) {
+                return response()->json([
+                    'error' => 'Dokumen SPTKP wajib diunggah.',
+                ], 422);
+            }
+
+            if ($perusahaan->is_ktp && !in_array('ktp', $attachmentTypes, true)) {
+                return response()->json([
+                    'error' => 'Dokumen KTP wajib diunggah.',
+                ], 422);
+            }
+
             $customer = Customer::create(array_merge($validated, [
                 'id_user' => $userId,
                 'id_perusahaan' => $id_perusahaan,
             ]));
 
-
             if (!empty($validated['attachments'])) {
                 foreach ($validated['attachments'] as $attachment) {
-                    // Ensure we only save string paths, skip blobs if any
                     if (!str_starts_with($attachment['path'], 'blob:')) {
                         CustomerAttach::create([
                             'customer_id' => $customer->id,
-                            'nama_file'   => $attachment['nama_file'],
-                            'path'        => $attachment['path'], // Expected: Final path string
-                            'type'        => $attachment['type'],
+                            'nama_file' => $attachment['nama_file'],
+                            'path' => $attachment['path'],
+                            'type' => $attachment['type'],
                         ]);
                     }
                 }
@@ -486,68 +609,98 @@ class CustomerController extends Controller
                 'updated_at' => now(),
             ]);
 
-            CustomerLink::on('tako-perusahaan')
-                ->where('id_user', $userId)
-                ->whereNull('id_customer')
-                ->where('is_filled', false)
-                ->latest('id_link')
-                ->first()?->update([
-                    'id_customer' => $customer->id,
-                    'is_filled' => true,
-                    'filled_at' => now(),
-                ]);
-
+            $link->update([
+                'id_customer' => $customer->id,
+                'is_filled' => true,
+                'filled_at' => now(),
+            ]);
 
             DB::commit();
+
+            $linkUser = User::find($userId);
+
+            if ($linkUser) {
+                $isMarketing = $linkUser->hasRole('user');
+
+                $this->sendCustomerToExternalApi(
+                    $customer,
+                    $linkUser,
+                    $isMarketing ? null : ''
+                );
+            } else {
+                Log::warning('User link tidak ditemukan saat kirim customer public ke external API.', [
+                    'customer_id' => $customer->id,
+                    'user_id' => $userId,
+                ]);
+            }
 
             return response()->json([
                 'message' => 'Data Anda berhasil dibuat!',
             ], 200);
         } catch (\Throwable $th) {
             DB::rollBack();
-            return redirect()->back()->withErrors(['error' => 'Terjadi kesalahan: ' . $th->getMessage()], 500);
+
+            return response()->json([
+                'error' => 'Terjadi kesalahan: ' . $th->getMessage(),
+            ], 500);
         }
     }
 
     public function upload(Request $request)
     {
-        // Validasi File
         $file = $request->file('pdf') ?? $request->file('file');
+
         if (!$file) {
             return response()->json(['error' => 'File tidak ditemukan'], 400);
         }
 
-        // Ambil Parameter untuk Nama File
-        $order       = str_pad((int)$request->input('order'), 3, '0', STR_PAD_LEFT);
-        $npwp        = preg_replace('/[^0-9]/', '', $request->input('npwp_number'));
-        $type        = strtolower($request->input('type'));
+        $validator = Validator::make(
+            ['file' => $file],
+            [
+                'file' => [
+                    'required',
+                    'file',
+                    'max:5120',
+                    'mimes:pdf,jpg,jpeg,png,webp',
+                ],
+            ],
+            [
+                'file.mimes' => 'File harus berformat PDF, JPG, JPEG, PNG, atau WEBP.',
+                'file.max' => 'Ukuran file maksimal 5 MB.',
+            ]
+        );
 
-        // Simpan mode kompresi di nama file atau return ke frontend agar bisa dikirim balik saat store
-        // Di sini kita hanya butuh nama file temp yang unik
-        $ext         = $file->getClientOriginalExtension();
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => $validator->errors()->first('file'),
+            ], 422);
+        }
+
+        $order = str_pad((int) $request->input('order'), 3, '0', STR_PAD_LEFT);
+        $npwp = preg_replace('/[^0-9]/', '', $request->input('npwp_number'));
+        $type = strtolower($request->input('type'));
+
+        $ext = strtolower($file->getClientOriginalExtension());
         $uniqueId = uniqid();
-        $filename    = "{$npwp}-{$order}-{$type}-{$uniqueId}.{$ext}";
+        $filename = "{$npwp}-{$order}-{$type}-{$uniqueId}.{$ext}";
 
-        $disk        = Storage::disk('customers_external');
-        $tempDir     = 'temp';
+        $disk = Storage::disk('customers_external');
+        $tempDir = 'temp';
 
-        // Buat folder temp jika belum ada
         if (!$disk->exists($tempDir)) {
             $disk->makeDirectory($tempDir);
         }
 
-        // Simpan File RAW langsung ke Temp (Tanpa Kompresi)
         $tempRel = "{$tempDir}/{$filename}";
 
-        // Gunakan stream untuk efisiensi memori saat save
         $disk->put($tempRel, file_get_contents($file->getRealPath()));
 
         return response()->json([
-            'status'    => 'success',
-            'path'      => $tempRel,        // Path ini akan dikirim balik saat submit
+            'status' => 'success',
+            'path' => $tempRel,
             'nama_file' => $filename,
-            'is_temp'   => true,
-            'info'      => 'File uploaded to temp (uncompressed)'
+            'is_temp' => true,
+            'info' => 'File uploaded to temp uncompressed',
         ]);
     }
 
@@ -797,12 +950,42 @@ class CustomerController extends Controller
         if (!empty($user->id_perusahaan)) {
             $userCompanyIds[] = $user->id_perusahaan;
         }
+
         if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
             abort(403, 'Anda tidak memiliki akses ke data customer ini.');
         }
 
+        $company = Perusahaan::find($customer->id_perusahaan);
+
         return Inertia::render('m_customer/table/edit-data-form', [
-            'customer' => $customer->load('attachments'),
+            'customer' => $customer,
+
+            'attachmentRules' => [
+                'is_npwp' => (bool) ($company?->is_npwp ?? true),
+                'is_nib' => (bool) ($company?->is_nib ?? true),
+                'is_sptkp' => (bool) ($company?->is_sptkp ?? false),
+                'is_ktp' => (bool) ($company?->is_ktp ?? true),
+            ],
+
+            'companies' => $user->companies()
+                ->select(
+                    'perusahaan.id',
+                    'perusahaan.nama_perusahaan',
+                    'perusahaan.is_npwp',
+                    'perusahaan.is_nib',
+                    'perusahaan.is_sptkp',
+                    'perusahaan.is_ktp'
+                )
+                ->get()
+                ->map(fn ($company) => [
+                    'id' => $company->id,
+                    'nama_perusahaan' => $company->nama_perusahaan,
+                    'is_npwp' => (bool) $company->is_npwp,
+                    'is_nib' => (bool) $company->is_nib,
+                    'is_sptkp' => (bool) $company->is_sptkp,
+                    'is_ktp' => (bool) $company->is_ktp,
+                ])
+                ->values(),
         ]);
     }
 
@@ -1083,6 +1266,13 @@ class CustomerController extends Controller
             'user_id' => $link->id_user,
             'id_perusahaan' => $link->id_perusahaan,
             'isFilled' => $link->is_filled,
+
+            'attachmentRules' => [
+                'is_npwp' => (bool) ($perusahaan?->is_npwp ?? true),
+                'is_nib' => (bool) ($perusahaan?->is_nib ?? true),
+                'is_sptkp' => (bool) ($perusahaan?->is_sptkp ?? false),
+                'is_ktp' => (bool) ($perusahaan?->is_ktp ?? true),
+            ],
 
             'company' => [
                 'id' => $perusahaan?->id,

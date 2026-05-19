@@ -26,10 +26,18 @@ class Perusahaan extends Model
         'id_User_2',
         'id_User_3',
         'id_User',
+        'is_npwp',
+        'is_nib',
+        'is_sptkp',
+        'is_ktp',
     ];
 
     protected $casts = [
         'data' => 'json',
+        'is_npwp' => 'boolean',
+        'is_nib' => 'boolean',
+        'is_sptkp' => 'boolean',
+        'is_ktp' => 'boolean',
     ];
 
     /**
