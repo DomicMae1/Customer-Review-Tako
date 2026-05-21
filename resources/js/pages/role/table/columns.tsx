@@ -11,7 +11,7 @@ export const columns = (onEditClick: (role: Role) => void, onDeleteClick: (id: n
     {
         accessorKey: 'name',
         header: 'Role Name',
-        cell: ({ row }) => <div className="min-w-[150px] px-4 py-2">{row.original.name}</div>,
+        cell: ({ row }) => <div className="min-w-[120px] py-2 font-medium">{row.original.name}</div>,
     },
     {
         accessorKey: 'permissions',

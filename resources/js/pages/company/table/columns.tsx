@@ -1,4 +1,4 @@
-// Role/ManageRoles/table/columns.tsx
+// Company/ManageCompany/table/columns.tsx
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -10,17 +10,43 @@ export const columns = (onEditClick: (perusahaan: Perusahaan) => void, onDeleteC
     {
         accessorKey: 'nama_perusahaan',
         header: 'Nama Perusahaan',
-        cell: ({ row }) => <div className="min-w-[150px] px-4 py-2">{row.original.nama_perusahaan}</div>,
+        cell: ({ row }) => <div className="min-w-[150px] py-2">{row.original.nama_perusahaan}</div>,
     },
     {
-        accessorKey: 'Notify_1',
-        header: 'Notify 1',
-        cell: ({ row }) => <Badge variant={row.original.notify_1 ? 'default' : 'secondary'}>{row.original.notify_1 || 'tidak ada'}</Badge>,
+        accessorKey: 'logo_url',
+        header: 'Logo Perusahaan',
+        cell: ({ row }) => {
+            const logoUrl = row.original.logo_url;
+
+            return (
+                <div className="flex items-center py-2">
+                    {logoUrl ? (
+                        <img src={logoUrl} alt={`Logo ${row.original.nama_perusahaan}`} className="h-10 w-10 rounded-md border object-contain" />
+                    ) : (
+                        <Badge variant="secondary">tidak ada</Badge>
+                    )}
+                </div>
+            );
+        },
     },
     {
-        accessorKey: 'Notify_2',
-        header: 'Notify 2',
-        cell: ({ row }) => <Badge variant={row.original.Notify_2 ? 'default' : 'secondary'}>{row.original.notify_2 || 'tidak ada'}</Badge>,
+        accessorKey: 'domain',
+        header: 'Domain',
+        cell: ({ row }) => {
+            const domainName = row.original.domain?.domain;
+
+            return (
+                <div className="max-w-[260px] truncate py-2">
+                    {domainName ? (
+                        <Badge variant="outline" className="max-w-[260px] truncate">
+                            {domainName}
+                        </Badge>
+                    ) : (
+                        <Badge variant="secondary">tidak ada</Badge>
+                    )}
+                </div>
+            );
+        },
     },
     {
         id: 'actions',

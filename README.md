@@ -74,3 +74,9 @@ TRUNCATE TABLE customer_attaches;
 ```bash
 TRUNCATE TABLE customers RESTART IDENTITY CASCADE;
 ```
+
+## if want all database removed
+
+```bash
+php artisan db:drop-tako
+```
