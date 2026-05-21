@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ResettableDropzoneImage } from '@/components/ResettableDropzoneImage';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -134,55 +135,120 @@ export function DataTable<TData, TValue>({ columns, data, filterKey = 'nama_peru
 
     return (
         <div className="w-full space-y-4">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                     placeholder="Filter nama perusahaan..."
                     value={(table.getColumn(filterKey)?.getFilterValue() as string) ?? ''}
                     onChange={(event) => table.getColumn(filterKey)?.setFilterValue(event.target.value)}
-                    className="max-w-sm"
+                    className="w-full sm:max-w-sm"
                 />
-                <DataTableViewOptions table={table} />
-                <Button onClick={() => setOpenCreate(true)}>Tambah Perusahaan</Button>
+
+                <div className="grid grid-cols-1 gap-2 sm:ml-auto sm:flex sm:items-center">
+                    <DataTableViewOptions table={table} />
+
+                    <Button className="w-full sm:w-auto" onClick={() => setOpenCreate(true)}>
+                        Tambah Perusahaan
+                    </Button>
+                </div>
             </div>
 
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => (
-                                    <TableHead key={header.id}>
-                                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        ))}
-                    </TableHeader>
-                    <TableBody>
-                        {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row) => (
-                                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
-                                    {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+            {/* Desktop Table */}
+            <div className="hidden rounded-md border md:block">
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            {table.getHeaderGroups().map((headerGroup) => (
+                                <TableRow key={headerGroup.id}>
+                                    {headerGroup.headers.map((header) => (
+                                        <TableHead key={header.id}>
+                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                        </TableHead>
                                     ))}
                                 </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={columns.length} className="h-24 text-center">
-                                    Tidak ada data.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                            ))}
+                        </TableHeader>
+
+                        <TableBody>
+                            {table.getRowModel().rows?.length ? (
+                                table.getRowModel().rows.map((row) => (
+                                    <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                                        {row.getVisibleCells().map((cell) => (
+                                            <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                                        Tidak ada data.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="space-y-3 md:hidden">
+                {table.getRowModel().rows?.length ? (
+                    table.getRowModel().rows.map((row) => {
+                        const perusahaan = row.original as any;
+
+                        return (
+                            <div key={row.id} className="bg-card rounded-xl border p-4 shadow-sm">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Nama Perusahaan</p>
+                                        <h3 className="mt-1 text-base leading-tight font-semibold">{perusahaan.nama_perusahaan}</h3>
+                                    </div>
+
+                                    <div className="shrink-0">
+                                        {row
+                                            .getVisibleCells()
+                                            .filter((cell) => cell.column.id === 'actions')
+                                            .map((cell) => (
+                                                <div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                                            ))}
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 border-t pt-3 text-sm">
+                                    <div>
+                                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Logo Perusahaan</p>
+
+                                        {perusahaan.logo_url ? (
+                                            <div className="mt-2 flex items-center gap-3">
+                                                <img
+                                                    src={perusahaan.logo_url}
+                                                    alt={`Logo ${perusahaan.nama_perusahaan}`}
+                                                    className="h-14 w-14 rounded-md border object-contain"
+                                                />
+                                                <span className="text-muted-foreground text-xs">Logo tersedia</span>
+                                            </div>
+                                        ) : (
+                                            <p className="mt-1 font-medium">tidak ada</p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Domain</p>
+                                        <p className="mt-1 font-medium break-all">{perusahaan.domain?.domain || 'tidak ada'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="text-muted-foreground rounded-lg border p-6 text-center text-sm">Tidak ada data.</div>
+                )}
             </div>
 
             <DataTablePagination table={table} />
 
             {/* Dialog Tambah */}
             <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="max-h-[90vh] w-[92vw] overflow-y-auto rounded-lg sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Tambah Perusahaan</DialogTitle>
                     </DialogHeader>
@@ -261,12 +327,12 @@ export function DataTable<TData, TValue>({ columns, data, filterKey = 'nama_peru
                         </div>
                     </div>
 
-                    <DialogFooter className="sm:justify-start">
-                        <Button type="button" onClick={handleSubmit}>
+                    <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-start">
+                        <Button type="button" onClick={handleSubmit} className="w-full sm:w-auto">
                             Simpan
                         </Button>
                         <DialogClose asChild>
-                            <Button type="button" variant="secondary">
+                            <Button type="button" variant="secondary" className="w-full sm:w-auto">
                                 Batal
                             </Button>
                         </DialogClose>

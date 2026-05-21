@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Users/table/data-table.tsx
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -162,28 +163,30 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
     return (
         <div>
-            <div className="flex items-center gap-2 pb-4">
-                <div className="flex gap-2">
+            <div className="flex flex-col gap-2 pb-4 sm:flex-row sm:items-center">
+                <div className="w-full sm:w-auto">
                     <Input
                         placeholder="Filter users..."
                         value={filterValue}
                         onChange={(event) => {
                             setFilterValue(event.target.value);
                         }}
-                        className="max-w-sm"
+                        className="w-full sm:max-w-sm"
                     />
                 </div>
 
                 <DataTableViewOptions table={table} />
-                <Button className="h-9" variant="outline" onClick={() => setOpenImportCsv(true)}>
+                <Button className="h-9 w-full sm:w-auto" variant="outline" onClick={() => setOpenImportCsv(true)}>
                     Import from CSV
                 </Button>
-                <Button className="h-9" onClick={() => setOpenCreate(true)}>
+
+                <Button className="h-9 w-full sm:w-auto" onClick={() => setOpenCreate(true)}>
                     Add User
                 </Button>
             </div>
 
-            <div className="rounded-md border">
+            {/* Desktop Table */}
+            <div className="hidden rounded-md border md:block">
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
@@ -217,6 +220,50 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Mobile Card View */}
+            <div className="space-y-3 md:hidden">
+                {table.getRowModel().rows?.length ? (
+                    table.getRowModel().rows.map((row) => {
+                        const user = row.original as any;
+
+                        return (
+                            <div key={row.id} className="bg-card rounded-lg border p-4 shadow-sm">
+                                <div className="mb-3 flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <h3 className="truncate font-semibold">{user.name}</h3>
+                                        <p className="text-muted-foreground text-sm break-all">{user.email}</p>
+                                    </div>
+
+                                    <div>
+                                        {row
+                                            .getVisibleCells()
+                                            .filter((cell) => cell.column.id === 'actions')
+                                            .map((cell) => (
+                                                <div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                                            ))}
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 text-sm">
+                                    <div>
+                                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">UID</p>
+                                        <p className="mt-1 font-medium break-all">{user.uid || '-'}</p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Roles</p>
+                                        <p className="mt-1 font-medium">{user.roles?.map((role: any) => role.name).join(', ') || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="text-muted-foreground rounded-lg border p-6 text-center text-sm">No results.</div>
+                )}
+            </div>
+
             <DataTablePagination table={table} />
 
             <Dialog

@@ -249,25 +249,21 @@ class PerusahaanController extends Controller
             // Kita buat Tenant BARU dan Domain BARU
             
             $tenantId = Str::slug($validated['nama_perusahaan']);
-            
-            // Pastikan Tenant ID Unik
+
             if (\App\Models\Tenant::find($tenantId)) {
                 $tenantId .= '-' . Str::random(4);
             }
 
-            // Buat Tenant
             $tenant = \App\Models\Tenant::create([
                 'id' => $tenantId,
-                // 'perusahaan_id' => $perusahaan->id // Opsional (Relasi Owner)
+                'perusahaan_id' => $perusahaan->id,
             ]);
 
-            // Buat Domain
             $newDomainRecord = $tenant->domains()->create([
                 'domain' => $targetDomainString,
-                'path_company_logo' => $newLogoPath, // Simpan logo baru (atau null)
+                'path_company_logo' => $newLogoPath,
             ]);
 
-            // Update FK di perusahaan ke ID domain baru
             $perusahaan->id_domain = $newDomainRecord->id;
         }
 

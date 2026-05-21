@@ -77,6 +77,7 @@ export default function ManageCompany() {
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
+
         setForm((prevForm) => ({
             ...prevForm,
             [name]: value,
@@ -94,13 +95,13 @@ export default function ManageCompany() {
         setSelectedCompany(company);
         setCompanyLogoFile(null);
 
-        const manager = company.users.find((u: any) => u.pivot.role === 'manager');
-        const direktur = company.users.find((u: any) => u.pivot.role === 'direktur');
-        const lawyer = company.users.find((u: any) => u.pivot.role === 'lawyer');
+        const manager = company.users?.find((u: any) => u.pivot.role === 'manager');
+        const direktur = company.users?.find((u: any) => u.pivot.role === 'direktur');
+        const lawyer = company.users?.find((u: any) => u.pivot.role === 'lawyer');
 
         setForm({
             nama_perusahaan: company.nama_perusahaan || '',
-            domain: company.logo_url ? new URL(company.logo_url).hostname : company.domain?.domain || '',
+            domain: company.domain?.domain || (company.logo_url ? new URL(company.logo_url).hostname : ''),
             id_User_1: manager ? String(manager.id) : '',
             id_User_2: direktur ? String(direktur.id) : '',
             id_User_3: lawyer ? String(lawyer.id) : '',
@@ -139,15 +140,18 @@ export default function ManageCompany() {
         e.preventDefault();
 
         const formData = new FormData();
+
         Object.entries(form).forEach(([key, value]) => {
             if (value !== null) formData.append(key, value);
         });
 
-        // append file logo jika ada upload baru
-        if (companyLogoFile) formData.append('company_logo', companyLogoFile);
+        if (companyLogoFile) {
+            formData.append('company_logo', companyLogoFile);
+        }
 
         if (selectedCompany) {
             formData.append('_method', 'PUT');
+
             router.post(`/perusahaan/${selectedCompany.id}`, formData, {
                 forceFormData: true,
                 preserveScroll: true,
@@ -181,33 +185,39 @@ export default function ManageCompany() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Manage Companies" />
-            <div className="p-4">
+
+            <div className="w-full overflow-x-hidden p-3 sm:p-4">
                 <DataTable columns={columns(onEditClick, onDeleteClick)} data={companies} />
             </div>
 
             <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] w-[92vw] overflow-y-auto rounded-lg sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Hapus Perusahaan</DialogTitle>
-                        <div className="mt-2">Apakah Anda yakin ingin menghapus perusahaan ini?</div>
+                        <div className="text-muted-foreground mt-2 text-sm">Apakah Anda yakin ingin menghapus perusahaan ini?</div>
                     </DialogHeader>
-                    <DialogFooter className="sm:justify-start">
-                        <Button variant="destructive" className="text-white" onClick={onConfirmDelete}>
+
+                    <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-start">
+                        <Button variant="destructive" className="w-full text-white sm:w-auto" onClick={onConfirmDelete}>
                             Hapus
                         </Button>
+
                         <DialogClose asChild>
-                            <Button variant="secondary">Batal</Button>
+                            <Button variant="secondary" className="w-full sm:w-auto">
+                                Batal
+                            </Button>
                         </DialogClose>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             <Dialog open={openForm} onOpenChange={(isOpen) => !isOpen && resetFormAndClose()}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] w-[92vw] overflow-y-auto rounded-lg sm:max-w-lg">
                     <form onSubmit={onSubmit}>
                         <DialogHeader>
                             <DialogTitle>{selectedCompany ? 'Edit Perusahaan' : 'Tambah Perusahaan'}</DialogTitle>
                         </DialogHeader>
+
                         <div className="space-y-4 py-4">
                             <div>
                                 <Label htmlFor="nama_perusahaan">Nama Perusahaan</Label>
@@ -226,32 +236,31 @@ export default function ManageCompany() {
                                 <Input
                                     id="domain"
                                     name="domain"
-                                    value={form.domain} // Pastikan ini terikat ke state
+                                    value={form.domain}
                                     onChange={handleInputChange}
                                     placeholder="Contoh: alpha.registration.tako.co.id"
                                     required
                                 />
-                                <p className="text-muted-foreground mt-1 text-xs">Masukkan alamat domain lengkap (Full URL) untuk perusahaan ini.</p>
+                                <p className="text-muted-foreground mt-1 text-xs">Masukkan alamat domain lengkap untuk perusahaan ini.</p>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 {userRoles.map(({ key, label }) => (
                                     <div key={key}>
                                         <Label htmlFor={key}>{label}</Label>
                                         <select
                                             id={key}
-                                            className="w-full rounded border px-2 py-1"
+                                            className="bg-background h-10 w-full rounded-md border px-3 py-2 text-sm"
                                             value={form[key as keyof FormState]}
                                             onChange={(e) => handleUserChange(key as keyof FormState, e.target.value)}
                                         >
-                                            <div className="text-black">
-                                                <option value="">Pilih {label}</option>
-                                                {props.users?.map((user: any) => (
-                                                    <option key={user.id} value={user.id}>
-                                                        {user.name}
-                                                    </option>
-                                                ))}
-                                            </div>
+                                            <option value="">Pilih {label}</option>
+
+                                            {props.users?.map((user: any) => (
+                                                <option key={user.id} value={user.id}>
+                                                    {user.name}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 ))}
@@ -267,6 +276,7 @@ export default function ManageCompany() {
                                     placeholder="email1@contoh.com, email2@contoh.com"
                                 />
                             </div>
+
                             <div>
                                 <Label htmlFor="notify_2">Notifikasi Email 2</Label>
                                 <Input
@@ -277,6 +287,7 @@ export default function ManageCompany() {
                                     placeholder="email3@contoh.com, email4@contoh.com"
                                 />
                             </div>
+
                             <div>
                                 <ResettableDropzoneImage
                                     key={selectedCompany ? selectedCompany.id : 'new'}
@@ -294,10 +305,14 @@ export default function ManageCompany() {
                                 />
                             </div>
                         </div>
-                        <DialogFooter className="sm:justify-start">
-                            <Button type="submit">{selectedCompany ? 'Update' : 'Create'}</Button>
+
+                        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-start">
+                            <Button type="submit" className="w-full sm:w-auto">
+                                {selectedCompany ? 'Update' : 'Create'}
+                            </Button>
+
                             <DialogClose asChild>
-                                <Button variant="secondary" type="button">
+                                <Button variant="secondary" type="button" className="w-full sm:w-auto">
                                     Batal
                                 </Button>
                             </DialogClose>

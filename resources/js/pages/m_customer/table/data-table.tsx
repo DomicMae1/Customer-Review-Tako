@@ -18,7 +18,7 @@ import {
     VisibilityState,
 } from '@tanstack/react-table';
 import axios from 'axios';
-import { Copy } from 'lucide-react';
+import { Building2, ClipboardCheck, Copy, Phone, Plus, RotateCcw, ShieldCheck, UserRound } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -62,8 +62,11 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const isKeteranganStatus = filterColumn === 'keterangan_status';
     const isStatusReview = filterColumn === 'status';
     const isCreatorName = filterColumn === 'creator_name';
+    const isPemilikData = filterColumn === 'nama_perusahaan';
 
     const creatorNames = Array.from(new Set(data.map((item: any) => item.creator_name).filter(Boolean)));
+
+    const pemilikDataOptions = Array.from(new Set(data.map((item: any) => item.nama_perusahaan).filter((value: any) => value && value !== '-')));
     const [selectedPerusahaanId, setSelectedPerusahaanId] = useState<string>('');
 
     const table = useReactTable({
@@ -110,6 +113,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         table.resetColumnFilters();
         setColumnFilters([]);
         setFilterValue('');
+        setStatusFilter('');
         table.resetSorting();
         setSorting([{ id: 'keterangan_status', desc: true }]);
         setHasUserSorted(false);
@@ -165,20 +169,62 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         }
     };
 
+    const formatStatusText = (item: any) => {
+        const label = item.status_label ?? '-';
+        const namaUser = item.nama_user ?? '-';
+
+        if (!item.tanggal_status) {
+            return label;
+        }
+
+        const dateObj = new Date(item.tanggal_status);
+
+        const tanggalFormat = dateObj.toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+
+        return `${label} oleh ${namaUser} pada ${tanggalFormat}`;
+    };
+
+    const getReviewStatus = (status?: string) => {
+        const value = String(status ?? '').toLowerCase();
+
+        if (value === 'approved') {
+            return {
+                label: 'Aman',
+                className: 'text-green-600',
+            };
+        }
+
+        if (value === 'rejected') {
+            return {
+                label: 'Bermasalah',
+                className: 'text-red-600',
+            };
+        }
+
+        return {
+            label: status && status !== '-' ? status : '-',
+            className: 'text-gray-900 dark:text-white',
+        };
+    };
+
     return (
         <div>
-            <div className="flex hidden items-center gap-2 pb-4 md:block">
-                <div className="flex gap-2">
+            <div className="hidden items-center justify-between gap-4 pb-4 md:flex">
+                <div className="flex flex-wrap items-center gap-2">
                     <Select value={filterColumn} onValueChange={(val) => setFilterColumn(val as any)}>
                         <SelectTrigger className="w-[250px]">
                             <SelectValue placeholder="Pilih Kolom" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="nama_perusahaan">Ownership</SelectItem>
-                            <SelectItem value="creator_name">Disubmit Oleh</SelectItem>
                             <SelectItem value="nama_customer">Nama Customer</SelectItem>
-                            <SelectItem value="keterangan_status">Keterangan Status</SelectItem>
+                            <SelectItem value="creator_name">Dibuat Oleh</SelectItem>
+                            <SelectItem value="nama_perusahaan">Pemilik Data</SelectItem>
                             <SelectItem value="status">Status Review</SelectItem>
+                            <SelectItem value="keterangan_status">Keterangan Status</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -208,7 +254,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     ) : isCreatorName ? (
                         <Select value={filterValue} onValueChange={(val) => setFilterValue(val)}>
                             <SelectTrigger className="w-[250px]">
-                                <SelectValue placeholder="Pilih Creator" />
+                                <SelectValue placeholder="Pilih User" />
                             </SelectTrigger>
 
                             <SelectContent>
@@ -217,6 +263,24 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                                         {name}
                                     </SelectItem>
                                 ))}
+                            </SelectContent>
+                        </Select>
+                    ) : isPemilikData ? (
+                        <Select value={filterValue} onValueChange={(val) => setFilterValue(val)}>
+                            <SelectTrigger className="w-[250px]">
+                                <SelectValue placeholder="Pilih Pemilik Data" />
+                            </SelectTrigger>
+
+                            <SelectContent>
+                                {pemilikDataOptions.length > 0 ? (
+                                    pemilikDataOptions.map((namaPerusahaan) => (
+                                        <SelectItem key={namaPerusahaan} value={namaPerusahaan}>
+                                            {namaPerusahaan}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <div className="text-muted-foreground p-2 text-center text-sm">Data tidak ditemukan</div>
+                                )}
                             </SelectContent>
                         </Select>
                     ) : (
@@ -247,7 +311,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="ml-auto flex shrink-0 items-center gap-2">
                     <DataTableViewOptions table={table} />
                     {canAddCustomer && (
                         <Dialog>
@@ -327,81 +391,25 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             </div>
 
             {/* === FILTERS MOBILE === */}
-            <div className="flex w-full flex-col gap-3 px-3 py-3 md:hidden">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Select value={filterColumn} onValueChange={(v) => setFilterColumn(v as any)}>
-                        <SelectTrigger className="h-9 w-full px-2 text-sm">
-                            <SelectValue placeholder="Kolom" />
-                        </SelectTrigger>
-                        <SelectContent className="text-sm">
-                            <SelectItem value="nama_perusahaan">Ownership</SelectItem>
-                            <SelectItem value="creator_name">Disubmit Oleh</SelectItem>
-                            <SelectItem value="nama_customer">Nama Customer</SelectItem>
-                            <SelectItem value="keterangan_status">Keterangan Status</SelectItem>
-                            <SelectItem value="status">Review</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    {isKeteranganStatus ? (
-                        <Select value={filterValue} onValueChange={setFilterValue}>
-                            <SelectTrigger className="h-9 w-full px-2 text-sm">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent className="text-sm">
-                                <SelectItem value="diinput">Diinput</SelectItem>
-                                <SelectItem value="disubmit">Disubmit</SelectItem>
-                                <SelectItem value="diverifikasi">Diverifikasi</SelectItem>
-                                <SelectItem value="diketahui">Diketahui</SelectItem>
-                                <SelectItem value="direview">Direview</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    ) : isStatusReview ? (
-                        <Select value={filterValue} onValueChange={setFilterValue}>
-                            <SelectTrigger className="h-9 w-full px-2 text-sm">
-                                <SelectValue placeholder="Review" />
-                            </SelectTrigger>
-                            <SelectContent className="text-sm">
-                                <SelectItem value="approved">Aman</SelectItem>
-                                <SelectItem value="rejected">Bermasalah</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    ) : (
-                        <Input
-                            placeholder="Kata kunci..."
-                            value={filterValue}
-                            onChange={(e) => setFilterValue(e.target.value)}
-                            className="h-9 w-full px-2 text-sm"
-                        />
-                    )}
-
-                    {userRole === 'direktur' && (
-                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                            <SelectTrigger className="h-9 w-full px-2 text-sm">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent className="text-sm">
-                                <SelectItem value="all">Semua</SelectItem>
-                                <SelectItem value="sudah">Sudah Mengetahui</SelectItem>
-                                <SelectItem value="belum">Belum Mengetahui</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    )}
-
-                    <Button variant="outline" onClick={handleReset} className="h-9 w-full text-sm">
-                        Reset
-                    </Button>
-                </div>
-
-                {/* Action Bar */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <div className="text-sm">
-                        <DataTableViewOptions table={table} />
+            <div className="flex w-full flex-col gap-4 px-5 py-3 md:hidden">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-foreground text-xl leading-tight font-bold">Customer Data</h1>
+                        <p className="text-muted-foreground mt-1 max-w-[240px] text-sm leading-snug">Manage your customer</p>
                     </div>
 
                     {canAddCustomer && (
                         <Dialog>
                             <DialogTrigger asChild>
-                                <Button className="h-9 w-full text-sm sm:w-auto">Add Customer</Button>
+                                <Button
+                                    type="button"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0 rounded-full bg-black text-white shadow-sm hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                                    title="Add Customer"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    <span className="sr-only">Add Customer</span>
+                                </Button>
                             </DialogTrigger>
 
                             <DialogContent>
@@ -414,6 +422,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                                     <Link href="/customer/create?mode=manual">
                                         <Button className="h-9 w-full text-sm">Buat Sendiri</Button>
                                     </Link>
+
                                     <Button variant="outline" className="h-9 w-full text-sm" onClick={() => setIsNameDialogOpen(true)}>
                                         Bagikan ke Customer
                                     </Button>
@@ -422,46 +431,219 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                         </Dialog>
                     )}
                 </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Select value={filterColumn} onValueChange={(v) => setFilterColumn(v as any)}>
+                        <SelectTrigger className="h-9 w-full px-2 text-sm">
+                            <SelectValue placeholder="Kolom" />
+                        </SelectTrigger>
+                        <SelectContent className="text-sm">
+                            <SelectItem value="nama_customer">Nama Customer</SelectItem>
+                            <SelectItem value="creator_name">Dibuat Oleh</SelectItem>
+                            <SelectItem value="nama_perusahaan">Pemilik Data</SelectItem>
+                            <SelectItem value="status">Status Review</SelectItem>
+                            <SelectItem value="keterangan_status">Keterangan Status</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <div className="flex items-center gap-2">
+                        {isKeteranganStatus ? (
+                            <Select value={filterValue} onValueChange={setFilterValue}>
+                                <SelectTrigger className="h-9 w-full px-2 text-sm">
+                                    <SelectValue placeholder="Pilih Status" />
+                                </SelectTrigger>
+                                <SelectContent className="text-sm">
+                                    <SelectItem value="diinput">Diinput</SelectItem>
+                                    <SelectItem value="disubmit">Disubmit</SelectItem>
+                                    <SelectItem value="diverifikasi">Diverifikasi</SelectItem>
+                                    <SelectItem value="diketahui">Diketahui</SelectItem>
+                                    <SelectItem value="direview">Direview</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        ) : isStatusReview ? (
+                            <Select value={filterValue} onValueChange={setFilterValue}>
+                                <SelectTrigger className="h-9 w-full px-2 text-sm">
+                                    <SelectValue placeholder="Pilih Review Status" />
+                                </SelectTrigger>
+                                <SelectContent className="text-sm">
+                                    <SelectItem value="approved">Aman</SelectItem>
+                                    <SelectItem value="rejected">Bermasalah</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        ) : isCreatorName ? (
+                            <Select value={filterValue} onValueChange={(val) => setFilterValue(val)}>
+                                <SelectTrigger className="h-9 w-full px-2 text-sm">
+                                    <SelectValue placeholder="Pilih User" />
+                                </SelectTrigger>
+
+                                <SelectContent>
+                                    {creatorNames.map((name) => (
+                                        <SelectItem key={name} value={name}>
+                                            {name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : isPemilikData ? (
+                            <Select value={filterValue} onValueChange={setFilterValue}>
+                                <SelectTrigger className="h-9 w-full px-2 text-sm">
+                                    <SelectValue placeholder="Pilih Pemilik Data" />
+                                </SelectTrigger>
+                                <SelectContent className="text-sm">
+                                    {pemilikDataOptions.length > 0 ? (
+                                        pemilikDataOptions.map((namaPerusahaan) => (
+                                            <SelectItem key={namaPerusahaan} value={namaPerusahaan}>
+                                                {namaPerusahaan}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <div className="text-muted-foreground p-2 text-center text-sm">Data tidak ditemukan</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Input
+                                placeholder="Kata kunci..."
+                                value={filterValue}
+                                onChange={(e) => setFilterValue(e.target.value)}
+                                className="h-9 w-full px-2 text-sm"
+                            />
+                        )}
+
+                        {userRole === 'direktur' && (
+                            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                                <SelectTrigger className="h-9 w-full px-2 text-sm">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent className="text-sm">
+                                    <SelectItem value="all">Semua</SelectItem>
+                                    <SelectItem value="sudah">Sudah Mengetahui</SelectItem>
+                                    <SelectItem value="belum">Belum Mengetahui</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={handleReset}
+                            className="h-9 w-9 shrink-0 rounded-md"
+                            title="Reset"
+                        >
+                            <RotateCcw className="h-4 w-4" />
+                            <span className="sr-only">Reset</span>
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Action Bar */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <div className="text-sm">
+                        <DataTableViewOptions table={table} />
+                    </div>
+                </div>
             </div>
 
             {/* === MOBILE CARD LIST === */}
-            <div className="grid w-full grid-cols-1 gap-3 px-3 md:hidden">
+            <div className="grid w-full grid-cols-1 gap-4 px-5 pb-4 md:hidden">
                 {table.getRowModel().rows?.length ? (
                     table.getRowModel().rows.map((row) => {
-                        const cells = row.getVisibleCells();
+                        const item = row.original as any;
+                        const action = row.getVisibleCells().find((c) => c.column.id === 'actions');
+                        const reviewStatus = getReviewStatus(item.status);
 
                         return (
-                            <div key={row.id} className="rounded-lg border bg-white p-4 shadow-sm dark:border-white dark:bg-black">
-                                <div className="space-y-3">
-                                    {cells
-                                        .filter((c) => c.column.id !== 'select' && c.column.id !== 'actions')
-                                        .map((cell) => (
-                                            <div key={cell.id} className="flex flex-col gap-0.5">
-                                                {/* LABEL */}
-                                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                                    {flexRender(cell.column.columnDef.header, cell.getContext())}
-                                                </p>
+                            <div
+                                key={row.id}
+                                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-950"
+                            >
+                                {/* HEADER */}
+                                <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-4 dark:border-neutral-800">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                                                Nama Customer
+                                            </p>
+                                            <p className="mt-1 truncate text-base font-bold text-gray-950 dark:text-white">
+                                                {item.nama_customer || '-'}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                                {/* VALUE */}
-                                                <p className="text-sm font-medium break-words text-gray-900 dark:text-white">
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    <div className="shrink-0">{action ? flexRender(action.column.columnDef.cell, action.getContext()) : null}</div>
+                                </div>
+
+                                {/* BODY */}
+                                <div className="space-y-4 px-4 py-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="flex gap-2">
+                                            <Building2 className="mt-1 h-4 w-4 shrink-0 text-blue-600" />
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                                                    Pemilik Data
+                                                </p>
+                                                <p className="mt-1 text-sm font-medium break-words text-gray-950 dark:text-white">
+                                                    {item.nama_perusahaan || '-'}
                                                 </p>
                                             </div>
-                                        ))}
+                                        </div>
 
-                                    {/* ACTIONS */}
-                                    {(() => {
-                                        const action = cells.find((c) => c.column.id === 'actions');
-                                        if (!action) return null;
+                                        <div className="flex gap-2">
+                                            <UserRound className="mt-1 h-4 w-4 shrink-0 text-blue-600" />
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                                                    Dibuat Oleh
+                                                </p>
+                                                <p className="mt-1 text-sm font-medium break-words text-gray-950 dark:text-white">
+                                                    {item.creator_name || '-'}
+                                                </p>
+                                            </div>
+                                        </div>
 
-                                        return <div>{flexRender(action.column.columnDef.cell, action.getContext())}</div>;
-                                    })()}
+                                        <div className="col-span-2 flex gap-2">
+                                            <Phone className="mt-1 h-4 w-4 shrink-0 text-blue-600" />
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                                                    No Telp PIC
+                                                </p>
+                                                <p className="mt-1 text-sm font-medium text-gray-950 dark:text-white">
+                                                    {item.no_telp_personal || '-'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-gray-200 dark:border-neutral-800" />
+
+                                    <div className="space-y-4">
+                                        <div className="flex gap-2">
+                                            <ClipboardCheck className="mt-1 h-4 w-4 shrink-0 text-blue-600" />
+                                            <div>
+                                                <p className="text-[11px] font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+                                                    Status Review
+                                                </p>
+                                                <p className={`mt-1 text-sm font-semibold ${reviewStatus.className}`}>{reviewStatus.label}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-blue-600" />
+                                            <div>
+                                                <p className="text-[11px] font-semibold tracking-wide text-blue-700 uppercase dark:text-blue-400">
+                                                    Keterangan Status
+                                                </p>
+                                                <p className="mt-1 text-sm leading-relaxed text-gray-950 dark:text-white">{formatStatusText(item)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         );
                     })
                 ) : (
-                    <div className="rounded-lg border bg-white p-4 text-center text-gray-500 dark:bg-gray-800 dark:text-gray-400">No results.</div>
+                    <div className="rounded-lg border bg-white p-4 text-center text-gray-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-gray-400">
+                        No results.
+                    </div>
                 )}
             </div>
 

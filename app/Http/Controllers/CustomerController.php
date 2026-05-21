@@ -1231,8 +1231,7 @@ class CustomerController extends Controller
 
             DB::commit();
 
-            return redirect()->route('customer.index')
-                ->with('success', 'Data Customer berhasil dihapus (soft delete)!');
+            return redirect()->route('customer.index');
         } catch (\Exception $e) {
             DB::rollBack();
 
