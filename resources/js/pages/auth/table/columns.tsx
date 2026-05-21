@@ -13,19 +13,24 @@ export const columns = (
     {
         accessorKey: 'name',
         header: 'Name',
-        cell: ({ row }) => <div className="px-4 py-2">{row.original.name}</div>,
+        cell: ({ row }) => <div className="py-2">{row.original.name}</div>,
     },
     {
         accessorKey: 'email',
         header: 'Email',
-        cell: ({ row }) => <div className="px-4 py-2">{row.original.email}</div>,
+        cell: ({ row }) => <div className="py-2">{row.original.email}</div>,
+    },
+    {
+        accessorKey: 'uid',
+        header: 'UID',
+        cell: ({ row }) => <div className="py-2">{row.original.uid}</div>,
     },
     {
         accessorKey: 'roles',
         header: 'Roles',
         cell: ({ row }) => {
             const roles = row.original.roles;
-            return <div className="px-4 py-2">{roles.map((role) => role.name).join(', ')}</div>;
+            return <div className="py-2">{roles.map((role) => role.name).join(', ')}</div>;
         },
     },
     {

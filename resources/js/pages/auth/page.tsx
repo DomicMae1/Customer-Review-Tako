@@ -176,12 +176,12 @@ export default function ManageUsers() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Manage Users" />
-            <div className="p-4">
+            <div className="w-full overflow-x-hidden p-3 sm:p-4">
                 <DataTable columns={columns(onDeleteClick, onEditClick, handleResetPassword)} data={users} />
             </div>
 
             <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="max-h-[90vh] w-[92vw] overflow-y-auto rounded-lg sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Hapus Data</DialogTitle>
                         <div className="mt-2">
@@ -189,12 +189,13 @@ export default function ManageUsers() {
                             yakin?
                         </div>
                     </DialogHeader>
-                    <DialogFooter className="sm:justify-start">
-                        <Button type="button" variant="destructive" onClick={onConfirmDelete}>
+                    <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-start">
+                        <Button type="button" variant="destructive" onClick={onConfirmDelete} className="w-full sm:w-auto">
                             Hapus
                         </Button>
+
                         <DialogClose asChild>
-                            <Button type="button" variant="secondary">
+                            <Button type="button" variant="secondary" className="w-full sm:w-auto">
                                 Close
                             </Button>
                         </DialogClose>

@@ -54,6 +54,7 @@ export interface User {
     email: string;
     avatar?: string;
     email_verified_at: string | null;
+    uid: string;
     created_at: string;
     updated_at: string;
     [key: string]: unknown;
@@ -84,6 +85,12 @@ export interface Perusahaan {
     created_at?: string;
     updated_at?: string;
     user?: User;
+    logo_url?: string | null;
+    domain?: {
+        id?: number;
+        domain?: string | null;
+        path_company_logo?: string | null;
+    } | null;
     [key: string]: unknown;
 }
 
