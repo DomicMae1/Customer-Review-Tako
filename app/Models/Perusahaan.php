@@ -30,6 +30,7 @@ class Perusahaan extends Model
         'is_nib',
         'is_sptkp',
         'is_ktp',
+        'is_ppjk',
     ];
 
     protected $casts = [
@@ -38,6 +39,7 @@ class Perusahaan extends Model
         'is_nib' => 'boolean',
         'is_sptkp' => 'boolean',
         'is_ktp' => 'boolean',
+        'is_ppjk' => 'boolean',
     ];
 
     /**

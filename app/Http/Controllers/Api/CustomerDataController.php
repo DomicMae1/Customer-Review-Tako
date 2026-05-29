@@ -15,10 +15,10 @@ class CustomerDataController extends Controller
             ->select([
                 'id',
                 'uid',
-                'nama_perusahaan as nama',
+                'nama_perusahaan',
                 'email',
-                'no_telp as phone',
-                'id_perusahaan as perusahaan_id',
+                'no_telp',
+                'id_perusahaan',
                 'created_at',
             ])
             ->latest('created_at')

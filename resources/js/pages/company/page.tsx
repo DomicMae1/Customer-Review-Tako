@@ -28,6 +28,7 @@ interface FormState {
     notify_1: string;
     notify_2: string;
     logo_url: string;
+    is_ppjk: boolean;
 }
 
 export default function ManageCompany() {
@@ -49,6 +50,7 @@ export default function ManageCompany() {
         notify_1: '',
         notify_2: '',
         logo_url: '',
+        is_ppjk: false,
     };
 
     const [form, setForm] = useState<FormState>(initialFormState);
@@ -108,6 +110,7 @@ export default function ManageCompany() {
             notify_1: company.notify_1 || '',
             notify_2: company.notify_2 || '',
             logo_url: company.logo_url || '',
+            is_ppjk: Boolean(company.is_ppjk),
         });
 
         setOpenForm(true);
@@ -142,7 +145,14 @@ export default function ManageCompany() {
         const formData = new FormData();
 
         Object.entries(form).forEach(([key, value]) => {
-            if (value !== null) formData.append(key, value);
+            if (value === null) return;
+
+            if (typeof value === 'boolean') {
+                formData.append(key, value ? '1' : '0');
+                return;
+            }
+
+            formData.append(key, value);
         });
 
         if (companyLogoFile) {
@@ -264,6 +274,27 @@ export default function ManageCompany() {
                                         </select>
                                     </div>
                                 ))}
+                            </div>
+
+                            <div className="flex items-start gap-3 rounded-lg border p-3">
+                                <input
+                                    id="is_ppjk"
+                                    type="checkbox"
+                                    checked={form.is_ppjk}
+                                    onChange={(e) =>
+                                        setForm((prev) => ({
+                                            ...prev,
+                                            is_ppjk: e.target.checked,
+                                        }))
+                                    }
+                                    className="mt-1 h-4 w-4"
+                                />
+                                <div className="space-y-1">
+                                    <Label htmlFor="is_ppjk">Perusahaan PPJK</Label>
+                                    <p className="text-muted-foreground text-xs">
+                                        Jika aktif, customer dari perusahaan ini boleh dikirim ke external API.
+                                    </p>
+                                </div>
                             </div>
 
                             <div>

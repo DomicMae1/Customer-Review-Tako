@@ -82,6 +82,7 @@ export interface Perusahaan {
     id_User: number | null;
     Notify_1: boolean | null;
     Notify_2: boolean | null;
+    is_ppjk?: boolean;
     created_at?: string;
     updated_at?: string;
     user?: User;
