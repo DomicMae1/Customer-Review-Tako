@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -34,7 +35,9 @@ interface DataTableProps<TData, TValue> {
 export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
     const { props } = usePage();
     const auth = props.auth || {};
+    const companies = Array.isArray((props as any).companies) ? (props as any).companies : [];
     const userRole = auth.user?.roles?.[0]?.name ?? '';
+    const isAdmin = userRole === 'admin';
 
     const userHasMainCompany = Boolean(auth.user?.id_perusahaan);
 
@@ -50,8 +53,11 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
     const [isNameDialogOpen, setIsNameDialogOpen] = useState(false);
     const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [customerName, setCustomerName] = useState('');
     const [generatedLink, setGeneratedLink] = useState('');
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [selectedImportPerusahaanId, setSelectedImportPerusahaanId] = useState('');
     const [statusFilter, setStatusFilter] = useState<'sudah' | 'belum' | ''>('');
 
     const [filterColumn, setFilterColumn] = useState<'nama_customer' | 'creator_name' | 'nama_perusahaan' | 'keterangan_status' | 'status'>(
@@ -167,6 +173,42 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             console.error('Gagal menyalin link:', error);
             toast.error('Gagal menyalin link.');
         }
+    };
+
+    const handleImportCsv = () => {
+        setIsImportDialogOpen(true);
+    };
+
+    const handleSubmitImportCsv = (event: React.FormEvent) => {
+        event.preventDefault();
+
+        if (!selectedImportPerusahaanId) {
+            toast.error('Pilih perusahaan tujuan terlebih dahulu.');
+            return;
+        }
+
+        if (!csvFile) {
+            toast.error('Pilih file CSV terlebih dahulu.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('id_perusahaan', selectedImportPerusahaanId);
+        formData.append('csv_file', csvFile);
+
+        router.post(route('customer.import-csv'), formData, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsImportDialogOpen(false);
+                setCsvFile(null);
+                setSelectedImportPerusahaanId('');
+            },
+            onError: (errors) => {
+                const firstError = Object.values(errors)[0];
+                toast.error(typeof firstError === 'string' ? firstError : 'Gagal mengimpor data customer dari CSV.');
+            },
+        });
     };
 
     const formatStatusText = (item: any) => {
@@ -313,6 +355,11 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
                 <div className="ml-auto flex shrink-0 items-center gap-2">
                     <DataTableViewOptions table={table} />
+                    {isAdmin && (
+                        <Button variant="outline" className="h-9" onClick={handleImportCsv}>
+                            Import from CSV
+                        </Button>
+                    )}
                     {canAddCustomer && (
                         <Dialog>
                             <DialogTrigger asChild>
@@ -538,6 +585,11 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
                 {/* Action Bar */}
                 <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    {isAdmin && (
+                        <Button type="button" variant="outline" className="h-9 w-full sm:w-auto" onClick={handleImportCsv}>
+                            Import from CSV
+                        </Button>
+                    )}
                     <div className="text-sm">
                         <DataTableViewOptions table={table} />
                     </div>
@@ -648,6 +700,61 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             </div>
 
             <DataTablePagination table={table} />
+            <Dialog
+                open={isImportDialogOpen}
+                onOpenChange={(open) => {
+                    setIsImportDialogOpen(open);
+
+                    if (!open) {
+                        setCsvFile(null);
+                        setSelectedImportPerusahaanId('');
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Import Customer from CSV</DialogTitle>
+                        <DialogDescription>Pilih perusahaan tujuan dan unggah file CSV customer.</DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleSubmitImportCsv} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="import_customer_company">Perusahaan Tujuan</Label>
+                            <Select value={selectedImportPerusahaanId} onValueChange={setSelectedImportPerusahaanId}>
+                                <SelectTrigger id="import_customer_company" className="w-full">
+                                    <SelectValue placeholder="Pilih perusahaan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {companies.map((company: any) => (
+                                        <SelectItem key={company.id} value={String(company.id)}>
+                                            {company.nama_perusahaan}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="customer_csv_file">CSV File</Label>
+                            <Input
+                                id="customer_csv_file"
+                                type="file"
+                                accept=".csv,text/csv"
+                                onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+                            />
+                        </div>
+
+                        <DialogFooter className="mt-6 sm:justify-start">
+                            <Button type="submit">Import</Button>
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary">
+                                    Cancel
+                                </Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
             <Dialog open={isNameDialogOpen} onOpenChange={setIsNameDialogOpen}>
                 <DialogContent>
                     <DialogHeader>

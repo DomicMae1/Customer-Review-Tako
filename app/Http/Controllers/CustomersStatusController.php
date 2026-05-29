@@ -116,6 +116,102 @@ class CustomersStatusController extends Controller
         return (int) $value;
     }
 
+    private function hasExistingNpwpRegistration(Customer $customer): bool
+    {
+        $query = Customer::whereKeyNot($customer->id);
+
+        if (!empty($customer->uid)) {
+            return $query->where('uid', $customer->uid)->exists();
+        }
+
+        $noNpwp = trim((string) $customer->no_npwp);
+        $noNpwp16 = trim((string) $customer->no_npwp_16);
+
+        if ($noNpwp === '' && $noNpwp16 === '') {
+            return false;
+        }
+
+        return $query->where(function ($q) use ($noNpwp, $noNpwp16) {
+            if ($noNpwp !== '') {
+                $q->orWhere('no_npwp', $noNpwp);
+            }
+
+            if ($noNpwp16 !== '') {
+                $q->orWhere('no_npwp_16', $noNpwp16);
+            }
+        })->exists();
+    }
+
+    private function parseValidEmails(?string $rawEmails): array
+    {
+        if (empty($rawEmails)) {
+            return [];
+        }
+
+        return collect(explode(',', $rawEmails))
+            ->map(fn($email) => trim($email))
+            ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
+    private function getCompanyRoleRecipientEmails(?int $companyId, string $role, bool $includeGlobalUsers = false): array
+    {
+        $query = User::role($role)
+            ->whereNotNull('email');
+
+        if ($companyId) {
+            $query->where(function ($q) use ($companyId, $includeGlobalUsers) {
+                $q->where('id_perusahaan', $companyId)
+                    ->orWhereHas('companies', function ($companyQuery) use ($companyId) {
+                        $companyQuery->where('perusahaan.id', $companyId);
+                    });
+
+                if ($includeGlobalUsers) {
+                    $q->orWhereNull('id_perusahaan');
+                }
+            });
+        } elseif (!$includeGlobalUsers) {
+            return [];
+        }
+
+        return $query->pluck('email')
+            ->map(fn($email) => trim($email))
+            ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
+    private function getProblematicNpwpRecipientEmails(?Perusahaan $perusahaan, string $submitterRole): array
+    {
+        $rolesToNotify = match ($submitterRole) {
+            'user' => ['manager', 'direktur', 'auditor'],
+            'manager' => ['direktur', 'auditor'],
+            'direktur' => ['auditor'],
+            default => [],
+        };
+
+        $emails = collect($this->parseValidEmails($perusahaan?->notify_1));
+
+        foreach ($rolesToNotify as $roleToNotify) {
+            $emails = $emails->merge(
+                $this->getCompanyRoleRecipientEmails(
+                    $perusahaan?->id,
+                    $roleToNotify,
+                    $roleToNotify === 'auditor'
+                )
+            );
+        }
+
+        return $emails
+            ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
     public function submit(Request $request)
     {
 
@@ -133,9 +229,8 @@ class CustomersStatusController extends Controller
         if (!$status) return back()->with('error', 'Data status customer tidak ditemukan.');
 
         $customer = $status->customer;
-
-        $firstCustomerId = \App\Models\Customer::min('id');  
-        $isFirstCustomer = $customer->id == $firstCustomerId;
+        $wasSubmittedToWorkflow = !empty($status->submit_1_timestamps);
+        $isFirstNpwpRegistration = !$this->hasExistingNpwpRegistration($customer);
 
         // 1. Ambil Info Perusahaan untuk Folder Name
         $idPerusahaan = $request->input('id_perusahaan');
@@ -223,28 +318,17 @@ class CustomersStatusController extends Controller
 
             // Jika ditemukan data lama yang bermasalah, KIRIM EMAIL
             if ($problematicCustomer) {
-
-                $emailsToNotify = [];
-                if ($perusahaan && !empty($perusahaan->notify_1)) {
-                    $emailsToNotify = explode(',', $perusahaan->notify_1);
-                }
-
-                // Fallback (Jaga-jaga jika email kosong)
-                if (empty($emailsToNotify)) {
-                    $emailsToNotify = ['default@internal-perusahaan.com'];
-                }
-
-                $validEmails = collect($emailsToNotify)
-                    ->map(fn($email) => trim($email))
-                    ->filter(fn($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
-                    ->unique()
-                    ->toArray();
+                $validEmails = $this->getProblematicNpwpRecipientEmails($perusahaan, $role);
 
                 if (!empty($validEmails)) {
-                    Log::info("Mengirim Alert Duplikat NPWP (Oleh: $role) ke:", $validEmails);
+                    Log::info('Mengirim Alert Duplikat NPWP', [
+                        'submitted_by_role' => $role,
+                        'customer_id' => $customer->id,
+                        'company_id' => $perusahaan?->id,
+                        'recipient_emails' => $validEmails,
+                    ]);
 
                     try {
-                        // GANTI CLASS INI
                         Mail::to($validEmails)->send(new \App\Mail\CustomerAlert(
                             $user,                                                      // User yang submit
                             $customer,                                                  // Customer baru
@@ -254,6 +338,12 @@ class CustomersStatusController extends Controller
                     } catch (\Exception $e) {
                         Log::error("Gagal kirim email alert duplikat: " . $e->getMessage());
                     }
+                } else {
+                    Log::warning('Alert Duplikat NPWP tidak dikirim karena tidak ada email penerima yang valid.', [
+                        'submitted_by_role' => $role,
+                        'customer_id' => $customer->id,
+                        'company_id' => $perusahaan?->id,
+                    ]);
                 }
             }
         }
@@ -460,9 +550,36 @@ class CustomersStatusController extends Controller
             'customer_id' => $request->input('customer_id'),
         ]);
 
+        $shouldNotifyAuditorForNewNpwp = !$wasSubmittedToWorkflow
+            && !empty($status->submit_1_timestamps)
+            && $isFirstNpwpRegistration;
+
+        Log::info('Auditor email NPWP decision', [
+            'customer_id' => $customer->id,
+            'customer_uid' => $customer->uid,
+            'no_npwp' => $customer->no_npwp,
+            'no_npwp_16' => $customer->no_npwp_16,
+            'submitted_by_role' => $role,
+            'was_submitted_to_workflow' => $wasSubmittedToWorkflow,
+            'submit_1_timestamps' => $status->submit_1_timestamps,
+            'is_first_npwp_registration' => $isFirstNpwpRegistration,
+            'should_notify_auditor_for_new_npwp' => $shouldNotifyAuditorForNewNpwp,
+            'reason' => $shouldNotifyAuditorForNewNpwp
+                ? 'Email auditor akan dikirim karena NPWP baru pertama kali terdaftar.'
+                : (
+                    $wasSubmittedToWorkflow
+                        ? 'Email auditor tidak dikirim karena customer ini sudah pernah masuk workflow.'
+                        : (
+                            empty($status->submit_1_timestamps)
+                                ? 'Email auditor tidak dikirim karena submit awal workflow belum terjadi.'
+                                : 'Email auditor tidak dikirim karena NPWP sudah pernah terdaftar sebelumnya.'
+                        )
+                ),
+        ]);
+
         $status->save();
 
-        if ($isFirstCustomer) {
+        if ($shouldNotifyAuditorForNewNpwp) {
             try {
                 $auditorEmails = User::role('auditor')
                     ->whereNotNull('email')
@@ -474,7 +591,18 @@ class CustomersStatusController extends Controller
                     ->toArray();
 
                 if (!empty($auditorEmails)) {
+                    Log::info('Mengirim email auditor untuk NPWP baru', [
+                        'customer_id' => $customer->id,
+                        'customer_uid' => $customer->uid,
+                        'auditor_emails' => $auditorEmails,
+                    ]);
+
                     Mail::to($auditorEmails)->send(new \App\Mail\NewCustomerAuditorMail($customer, $status, $user));
+                } else {
+                    Log::warning('Email auditor untuk NPWP baru tidak dikirim karena daftar email auditor kosong.', [
+                        'customer_id' => $customer->id,
+                        'customer_uid' => $customer->uid,
+                    ]);
                 }
             } catch (\Exception $e) {
                 Log::error('Gagal kirim email customer baru ke auditor: ' . $e->getMessage());

@@ -69,7 +69,7 @@
         </tr>
         <tr>
             <td>Kategori Usaha</td>
-            <td>{{ $customer->kategori_usaha }}</td>
+            <td>{{ $customer->kategori_usaha ?? '-' }}</td>
         </tr>
         <tr>
             <td>Nama Perusahaan</td>
@@ -93,7 +93,7 @@
         </tr>
         <tr>
             <td>No. Telepon Perusahaan</td>
-            <td>{{ $customer->no_telp }}</td>
+            <td>{{ $customer->formatted_no_telp ?: '-' }}</td>
         </tr>
         <tr>
             <td>No. Fax</td>
@@ -149,7 +149,7 @@
         </tr>
         <tr>
             <td>No. Telepon</td>
-            <td>{{ $customer->no_telp_personal }}</td>
+            <td>{{ $customer->formatted_no_telp_personal ?: '-' }}</td>
         </tr>
         <tr>
             <td>Email</td>

@@ -33,6 +33,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/customer-status-check', [CustomersStatusController::class, 'index']);
 
     Route::resource('customer', CustomerController::class);
+    Route::post('/customer/import-csv', [CustomerController::class, 'importCsv'])->name('customer.import-csv');
     Route::resource('customer-attachments', CustomerAttachController::class);
     // web.php
     Route::get('/customer/{id}/pdf', [CustomerController::class, 'generatePdf'])->name('customer.pdf');

@@ -36,6 +36,7 @@ interface FormState {
     id_User_3: string;
     notify_1: string;
     notify_2?: string;
+    is_ppjk: boolean;
 }
 
 interface DataTableProps<TData, TValue> {
@@ -69,6 +70,7 @@ export function DataTable<TData, TValue>({ columns, data, filterKey = 'nama_peru
         id_User_3: '',
         notify_1: '',
         notify_2: '',
+        is_ppjk: false,
     });
 
     const handleSubmit = () => {
@@ -82,6 +84,7 @@ export function DataTable<TData, TValue>({ columns, data, filterKey = 'nama_peru
         fd.append('id_User_3', form.id_User_3);
         fd.append('notify_1', form.notify_1 ?? '');
         fd.append('notify_2', form.notify_2 ?? '');
+        fd.append('is_ppjk', form.is_ppjk ? '1' : '0');
 
         // file logo jika ada
         if (companyLogoFile) {
@@ -100,6 +103,7 @@ export function DataTable<TData, TValue>({ columns, data, filterKey = 'nama_peru
                     id_User_3: '',
                     notify_1: '',
                     notify_2: '',
+                    is_ppjk: false,
                 });
                 setCompanyLogoFile(null);
             },
@@ -302,6 +306,22 @@ export function DataTable<TData, TValue>({ columns, data, filterKey = 'nama_peru
 
                         <div>
                             <ResettableDropzoneImage label="Upload Logo Perusahaan" isRequired={false} onFileChange={setCompanyLogoFile} />
+                        </div>
+
+                        <div className="flex items-start gap-3 rounded-lg border p-3">
+                            <input
+                                id="create_is_ppjk"
+                                type="checkbox"
+                                checked={form.is_ppjk}
+                                onChange={(e) => setForm({ ...form, is_ppjk: e.target.checked })}
+                                className="mt-1 h-4 w-4"
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="create_is_ppjk">Perusahaan PPJK</Label>
+                                <p className="text-muted-foreground text-xs">
+                                    Jika aktif, customer dari perusahaan ini boleh dikirim ke external API.
+                                </p>
+                            </div>
                         </div>
 
                         <div>
