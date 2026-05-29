@@ -45,7 +45,7 @@
                                 </tr>
                                 <tr>
                                     <td><strong>PIC</strong></td>
-                                    <td>: {{ $customer->nama_personal ?? '-' }} ({{ $customer->no_telp_personal ?? '-' }})</td>
+                                    <td>: {{ $customer->nama_personal ?? '-' }} ({{ $customer->formatted_no_telp_personal ?: '-' }})</td>
                                 </tr>
                             </table>
 

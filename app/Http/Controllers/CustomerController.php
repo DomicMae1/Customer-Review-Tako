@@ -219,7 +219,7 @@ class CustomerController extends Controller
                 // 7. Status Review (Approved/Rejected)                'status' => $status?->status_3 ?? '-',
                 'nama_user' => $userName,
                 'creator_name' => $customer->creator?->name ?? '-',
-                'no_telp_personal' => $customer->no_telp_personal,
+                'no_telp_personal' => $customer->formatted_no_telp_personal,
                 'note' => $note,
 
                 // Data Pelengkap Lainnya
@@ -241,6 +241,9 @@ class CustomerController extends Controller
 
         return Inertia::render('m_customer/page', [
             'customers' => $customerData,
+            'companies' => $user->hasRole('admin')
+                ? Perusahaan::select('id', 'nama_perusahaan')->orderBy('nama_perusahaan')->get()
+                : [],
             'company' => [
                 'id' => session('company_id'),
                 'name' => session('company_name'),
@@ -251,6 +254,176 @@ class CustomerController extends Controller
                 'error' => session('error'),
             ],
         ]);
+    }
+    
+    public function importCsv(Request $request)
+    {
+        $user = auth('web')->user();
+
+        if (!$user->hasRole('admin')) {
+            abort(403, 'Unauthorized access. Only admin can import customer CSV.');
+        }
+
+        $request->validate([
+            'csv_file' => ['required', 'file', 'mimes:csv,txt'],
+            'id_perusahaan' => ['required', 'integer'],
+        ]);
+
+        $perusahaan = Perusahaan::find($request->integer('id_perusahaan'));
+
+        if (!$perusahaan) {
+            return back()->withErrors([
+                'id_perusahaan' => 'Perusahaan tujuan tidak ditemukan.',
+            ]);
+        }
+
+        $file = $request->file('csv_file');
+        $path = $file?->getRealPath();
+
+        if (!$path) {
+            return back()->withErrors([
+                'csv_file' => 'File CSV tidak valid atau tidak bisa dibaca.',
+            ]);
+        }
+
+        $handle = fopen($path, 'rb');
+
+        if (!$handle) {
+            return back()->withErrors([
+                'csv_file' => 'Gagal membuka file CSV.',
+            ]);
+        }
+
+        $firstLine = fgets($handle);
+
+        if ($firstLine === false) {
+            fclose($handle);
+
+            return back()->withErrors([
+                'csv_file' => 'File CSV kosong.',
+            ]);
+        }
+
+        rewind($handle);
+
+        $delimiter = $this->detectCsvDelimiter($firstLine);
+        $headerRow = fgetcsv($handle, 0, $delimiter);
+
+        if ($headerRow === false) {
+            fclose($handle);
+
+            return back()->withErrors([
+                'csv_file' => 'Header CSV tidak dapat dibaca.',
+            ]);
+        }
+
+        $header = array_map(fn ($value) => $this->normalizeCsvHeader($value), $headerRow);
+
+        if (count(array_filter($header)) === 0) {
+            fclose($handle);
+
+            return back()->withErrors([
+                'csv_file' => 'Header CSV kosong atau tidak valid.',
+            ]);
+        }
+
+        $imported = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+        $rowNumber = 1;
+
+        DB::connection('tako-customer')->beginTransaction();
+        DB::connection('tako-perusahaan')->beginTransaction();
+
+        try {
+            while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                $rowNumber++;
+
+                if ($row === [null] || count(array_filter($row, fn ($value) => trim((string) $value) !== '')) === 0) {
+                    continue;
+                }
+
+                if (count($row) < count($header)) {
+                    $row = array_pad($row, count($header), '');
+                }
+
+                if (count($row) > count($header)) {
+                    $skipped++;
+                    $errors[] = "Baris {$rowNumber}: jumlah kolom melebihi header.";
+                    continue;
+                }
+
+                $rowData = array_combine($header, $row);
+
+                if ($rowData === false) {
+                    $skipped++;
+                    $errors[] = "Baris {$rowNumber}: data tidak dapat dipetakan ke header.";
+                    continue;
+                }
+
+                $customerPayload = $this->mapImportedCustomerRow($rowData);
+
+                if ($customerPayload['nama_perusahaan'] === '') {
+                    $skipped++;
+                    $errors[] = "Baris {$rowNumber}: nama customer/perusahaan kosong.";
+                    continue;
+                }
+
+                $existingCustomer = $this->findExistingCustomerForImport(
+                    $perusahaan->id,
+                    $customerPayload['nama_perusahaan'],
+                    $customerPayload['no_npwp'],
+                    $customerPayload['no_npwp_16']
+                );
+
+                if ($existingCustomer) {
+                    $existingCustomer->fill($this->mergeImportedCustomerData($existingCustomer, $customerPayload));
+
+                    if ($existingCustomer->trashed()) {
+                        $existingCustomer->restore();
+                    }
+
+                    $existingCustomer->save();
+                    $this->ensureCustomerStatusExists($existingCustomer->id, $existingCustomer->id_user ?: $user->id);
+                    $updated++;
+                    continue;
+                }
+
+                $customer = Customer::create(array_merge($customerPayload, [
+                    'id_user' => $user->id,
+                    'id_perusahaan' => $perusahaan->id,
+                ]));
+
+                $this->ensureCustomerStatusExists($customer->id, $user->id);
+                $imported++;
+            }
+
+            DB::connection('tako-perusahaan')->commit();
+            DB::connection('tako-customer')->commit();
+        } catch (\Throwable $th) {
+            DB::connection('tako-perusahaan')->rollBack();
+            DB::connection('tako-customer')->rollBack();
+            fclose($handle);
+
+            return back()->withErrors([
+                'csv_file' => 'Terjadi kesalahan saat import CSV: ' . $th->getMessage(),
+            ]);
+        }
+
+        fclose($handle);
+
+        $successMessage = "Import customer selesai. {$imported} data baru, {$updated} data diperbarui.";
+        $errorMessage = null;
+
+        if ($skipped > 0) {
+            $errorMessage = "Ada {$skipped} baris yang dilewati. " . Str::limit(implode(' | ', $errors), 500);
+        }
+
+        return redirect()
+            ->route('customer.index')
+            ->with('success', $successMessage)
+            ->with('error', $errorMessage);
     }
 
     /**
@@ -1057,7 +1230,7 @@ class CustomerController extends Controller
             $customer->load('attachments');
 
             return Inertia::render('m_customer/table/view-data-form', [
-                'customer' => $customer,
+                'customer' => $this->serializeCustomerForFrontend($customer),
                 'attachments' => $customer->attachments,
             ]);
         }
@@ -1074,7 +1247,7 @@ class CustomerController extends Controller
         $customer->load('attachments');
 
         return Inertia::render('m_customer/table/view-data-form', [
-            'customer' => $customer,
+            'customer' => $this->serializeCustomerForFrontend($customer),
             'attachments' => $customer->attachments,
         ]);
     }
@@ -1101,7 +1274,7 @@ class CustomerController extends Controller
         $company = Perusahaan::find($customer->id_perusahaan);
 
         return Inertia::render('m_customer/table/edit-data-form', [
-            'customer' => $customer,
+            'customer' => $this->serializeCustomerForFrontend($customer, true),
 
             'attachmentRules' => [
                 'is_npwp' => (bool) ($company?->is_npwp ?? true),
@@ -1582,6 +1755,16 @@ class CustomerController extends Controller
             return;
         }
 
+        if (!$perusahaan->is_ppjk) {
+            Log::info('Customer tidak dikirim ke external API karena perusahaan bukan PPJK.', [
+                'customer_id' => $customer->id,
+                'id_perusahaan' => $customer->id_perusahaan,
+                'company_name' => $perusahaan->nama_perusahaan,
+            ]);
+
+            return;
+        }
+
         $payload = [
             'uid_perusahaan' => $perusahaan->uid,
             'uid_marketing' => $uidMarketingOverride ?? $user->uid ?? '',
@@ -1624,5 +1807,236 @@ class CustomerController extends Controller
                 'payload' => $payload,
             ]);
         }
+    }
+
+    private function serializeCustomerForFrontend(Customer $customer, bool $forEdit = false): array
+    {
+        $payload = $customer->toArray();
+        $payload['kategori_usaha'] = $forEdit
+            ? ($customer->kategori_usaha ?? '')
+            : ($customer->kategori_usaha ?? '-');
+        $payload['no_telp'] = $forEdit
+            ? $customer->primary_no_telp
+            : ($customer->formatted_no_telp ?: '-');
+        $payload['no_telp_personal'] = $forEdit
+            ? $customer->primary_no_telp_personal
+            : ($customer->formatted_no_telp_personal ?: '-');
+
+        return $payload;
+    }
+
+    private function detectCsvDelimiter(string $line): string
+    {
+        $delimiters = [',', ';', "\t", '|'];
+        $bestDelimiter = ',';
+        $bestCount = -1;
+
+        foreach ($delimiters as $delimiter) {
+            $count = substr_count($line, $delimiter);
+
+            if ($count > $bestCount) {
+                $bestCount = $count;
+                $bestDelimiter = $delimiter;
+            }
+        }
+
+        return $bestDelimiter;
+    }
+
+    private function normalizeCsvHeader($value): string
+    {
+        $value = preg_replace('/^\xEF\xBB\xBF/', '', (string) $value);
+        $value = strtolower(trim($value));
+
+        return preg_replace('/[^a-z0-9]+/', '', $value);
+    }
+
+    private function mapImportedCustomerRow(array $row): array
+    {
+        $namaPerusahaan = $this->getCsvValue($row, ['nmmcust', 'namaperusahaan', 'namacustomer']);
+        $alamatLengkap = $this->getCsvValue($row, ['alamat', 'alamatlengkap']);
+        $alamatPenagihan = $this->getCsvValue($row, ['alamatfaktur', 'alamatpenagihan']);
+        $kota = $this->getCsvValue($row, ['kotatextcustomer', 'nmmkota', 'kota', 'kotafaktur']);
+        $emailPersonal = $this->sanitizeEmail($this->getCsvValue($row, ['email', 'emailpersonal', 'emailperusahaan']));
+        $npwp = $this->getCsvValue($row, ['npwp', 'nonpwp']);
+        $term = $this->getCsvValue($row, ['term', 'top']);
+        $keterangan = $this->getCsvValue($row, ['keterangan', 'remarks', 'note']);
+        $contactPerson = $this->getCsvValue($row, ['contactperson', 'namapersonal', 'namapj']);
+        $hp1 = $this->getCsvValue($row, ['hp1', 'notelppersonal', 'notelppj']);
+        $hp2 = $this->getCsvValue($row, ['hp2']);
+
+        return [
+            'kategori_usaha' => null,
+            'nama_perusahaan' => $namaPerusahaan,
+            'bentuk_badan_usaha' => $this->nullIfEmpty($this->inferBentukBadanUsaha($namaPerusahaan)),
+            'alamat_lengkap' => $this->nullIfEmpty($alamatLengkap),
+            'kota' => $this->nullIfEmpty($kota),
+            'no_telp' => $this->normalizeNullableArray([
+                $this->getCsvValue($row, ['telp1', 'notelp']),
+                $this->getCsvValue($row, ['telp2']),
+            ]),
+            'no_fax' => $this->nullIfEmpty($this->getCsvValue($row, ['fax', 'nofax'])),
+            'alamat_penagihan' => $this->nullIfEmpty($alamatPenagihan),
+            'email' => null,
+            'website' => $this->nullIfEmpty($this->getCsvValue($row, ['website', 'web'])),
+            'top' => $this->nullIfEmpty($this->extractTermsOfPayment($term, $keterangan)),
+            'status_perpajakan' => $npwp !== '' ? 'pkp' : null,
+            'no_npwp' => $this->nullIfEmpty($npwp),
+            'no_npwp_16' => $this->nullIfEmpty($this->formatNpwp16($npwp)),
+            'nama_pj' => null,
+            'no_ktp_pj' => null,
+            'no_telp_pj' => null,
+            'nama_personal' => $this->nullIfEmpty($contactPerson),
+            'jabatan_personal' => null,
+            'no_telp_personal' => $this->normalizeNullableArray([$hp1, $hp2]),
+            'email_personal' => $this->nullIfEmpty($emailPersonal),
+        ];
+    }
+
+    private function getCsvValue(array $row, array $keys, string $default = ''): string
+    {
+        foreach ($keys as $key) {
+            $normalizedKey = $this->normalizeCsvHeader($key);
+
+            if (array_key_exists($normalizedKey, $row)) {
+                return $this->normalizeImportedValue($row[$normalizedKey]);
+            }
+        }
+
+        return $default;
+    }
+
+    private function normalizeImportedValue($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        $value = trim((string) $value);
+        $value = preg_replace('/\s+/u', ' ', $value);
+
+        if ($value === '-' || strtolower($value) === 'null') {
+            return '';
+        }
+
+        return $value;
+    }
+
+    private function sanitizeEmail(string $email): string
+    {
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return '';
+        }
+
+        return $email;
+    }
+
+    private function inferBentukBadanUsaha(string $namaPerusahaan): string
+    {
+        $value = strtoupper(trim($namaPerusahaan));
+
+        return match (true) {
+            str_starts_with($value, 'PT ') || str_starts_with($value, 'PT.') => 'Perseroan Terbatas',
+            str_starts_with($value, 'CV ') || str_starts_with($value, 'CV.') => 'Commanditaire Vennootschap',
+            str_starts_with($value, 'UD ') || str_starts_with($value, 'UD.') => 'Usaha Dagang',
+            str_starts_with($value, 'PO ') || str_starts_with($value, 'PO.') => 'Perusahaan Perseorangan',
+            default => '',
+        };
+    }
+
+    private function extractTermsOfPayment(string $term, string $keterangan): string
+    {
+        if ($term !== '') {
+            return $term;
+        }
+
+        if (preg_match('/top\s*[:\-]?\s*(.+)$/i', $keterangan, $matches)) {
+            return trim($matches[1]);
+        }
+
+        return '';
+    }
+
+    private function formatNpwp16(string $npwp): string
+    {
+        $digits = preg_replace('/\D/', '', $npwp);
+
+        return strlen($digits) === 16 ? $digits : '';
+    }
+
+    private function findExistingCustomerForImport(int $idPerusahaan, ?string $namaPerusahaan, ?string $noNpwp, ?string $noNpwp16): ?Customer
+    {
+        $namaPerusahaan = $namaPerusahaan ?? '';
+        $noNpwp = $noNpwp ?? '';
+        $noNpwp16 = $noNpwp16 ?? '';
+
+        $query = Customer::withTrashed()->where('id_perusahaan', $idPerusahaan);
+
+        if ($noNpwp !== '' || $noNpwp16 !== '') {
+            $query->where(function ($subQuery) use ($noNpwp, $noNpwp16) {
+                if ($noNpwp !== '') {
+                    $subQuery->orWhere('no_npwp', $noNpwp);
+                }
+
+                if ($noNpwp16 !== '') {
+                    $subQuery->orWhere('no_npwp_16', $noNpwp16);
+                }
+            });
+
+            return $query->first();
+        }
+
+        return $query->whereRaw('LOWER(nama_perusahaan) = ?', [strtolower($namaPerusahaan)])->first();
+    }
+
+    private function mergeImportedCustomerData(Customer $customer, array $payload): array
+    {
+        return $payload;
+    }
+
+    private function ensureCustomerStatusExists(int $customerId, int $userId): void
+    {
+        $exists = DB::connection('tako-perusahaan')
+            ->table('customers_statuses')
+            ->where('id_Customer', $customerId)
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        DB::connection('tako-perusahaan')->table('customers_statuses')->insert([
+            'id_Customer' => $customerId,
+            'id_user' => $userId,
+            'submit_1_timestamps' => null,
+            'status_1_by' => null,
+            'status_1_timestamps' => null,
+            'status_1_keterangan' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function nullIfEmpty($value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_string($value) && trim($value) === '') {
+            return null;
+        }
+
+        return $value;
+    }
+
+    private function normalizeNullableArray(array $values): ?array
+    {
+        $normalized = array_values(array_filter(array_map(
+            fn ($value) => $this->nullIfEmpty(is_string($value) ? trim($value) : $value),
+            $values
+        )));
+
+        return empty($normalized) ? null : $normalized;
     }
 }

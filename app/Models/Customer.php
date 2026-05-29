@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Perusahaan;
 use App\Models\CustomerAttach;
+use Illuminate\Support\Str;
 
 class Customer extends Model
 {
@@ -42,6 +43,98 @@ class Customer extends Model
         'no_telp_personal',
         'email_personal',
     ];
+
+    public function setNoTelpAttribute($value): void
+    {
+        if (is_array($value)) {
+            $phones = $this->normalizePhoneNumbers($value);
+            $this->attributes['no_telp'] = empty($phones) ? null : json_encode($phones);
+            return;
+        }
+
+        if ($value === null) {
+            $this->attributes['no_telp'] = null;
+            return;
+        }
+
+        $trimmed = trim((string) $value);
+
+        if ($trimmed === '') {
+            $this->attributes['no_telp'] = null;
+            return;
+        }
+
+        $decoded = json_decode($trimmed, true);
+
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $phones = $this->normalizePhoneNumbers($decoded);
+            $this->attributes['no_telp'] = empty($phones) ? null : json_encode($phones);
+            return;
+        }
+
+        $this->attributes['no_telp'] = $trimmed;
+    }
+
+    public function getNoTelpListAttribute(): array
+    {
+        return $this->normalizePhoneNumbers($this->attributes['no_telp'] ?? null);
+    }
+
+    public function getFormattedNoTelpAttribute(): string
+    {
+        return implode(', ', $this->no_telp_list);
+    }
+
+    public function getPrimaryNoTelpAttribute(): string
+    {
+        return $this->no_telp_list[0] ?? '';
+    }
+
+    public function setNoTelpPersonalAttribute($value): void
+    {
+        if (is_array($value)) {
+            $phones = $this->normalizePhoneNumbers($value);
+            $this->attributes['no_telp_personal'] = empty($phones) ? null : json_encode($phones);
+            return;
+        }
+
+        if ($value === null) {
+            $this->attributes['no_telp_personal'] = null;
+            return;
+        }
+
+        $trimmed = trim((string) $value);
+
+        if ($trimmed === '') {
+            $this->attributes['no_telp_personal'] = null;
+            return;
+        }
+
+        $decoded = json_decode($trimmed, true);
+
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $phones = $this->normalizePhoneNumbers($decoded);
+            $this->attributes['no_telp_personal'] = empty($phones) ? null : json_encode($phones);
+            return;
+        }
+
+        $this->attributes['no_telp_personal'] = $trimmed;
+    }
+
+    public function getNoTelpPersonalListAttribute(): array
+    {
+        return $this->normalizePhoneNumbers($this->attributes['no_telp_personal'] ?? null);
+    }
+
+    public function getFormattedNoTelpPersonalAttribute(): string
+    {
+        return implode(', ', $this->no_telp_personal_list);
+    }
+
+    public function getPrimaryNoTelpPersonalAttribute(): string
+    {
+        return $this->no_telp_personal_list[0] ?? '';
+    }
 
     protected static function booted()
     {
@@ -129,5 +222,46 @@ class Customer extends Model
     public function customer_links()
     {
         return $this->hasOne(CustomerLink::class, 'id_customer');
+    }
+
+    private function normalizePhoneNumbers($value): array
+    {
+        if ($value === null) {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            if ($trimmed === '') {
+                return [];
+            }
+
+            $decoded = json_decode($trimmed, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $value = $decoded;
+            } else {
+                $value = [$trimmed];
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $phones = [];
+
+        foreach ($value as $phone) {
+            $phone = trim((string) $phone);
+
+            if ($phone === '' || $phone === '-') {
+                continue;
+            }
+
+            $phones[] = Str::of($phone)->squish()->value();
+        }
+
+        return array_values(array_unique($phones));
     }
 }
