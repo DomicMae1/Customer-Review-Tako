@@ -87,6 +87,7 @@ class PerusahaanController extends Controller
             'id_User'         => 'nullable|integer|exists:users,id',
             'notify_1'        => 'nullable|string',
             'notify_2'        => 'nullable|string',
+            'is_ppjk'         => 'nullable|boolean',
             'company_logo'    => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
 
@@ -98,6 +99,7 @@ class PerusahaanController extends Controller
             'id_domain'       => null, // Nanti kita update
             'notify_1'        => $validated['notify_1'] ?? null,
             'notify_2'        => $validated['notify_2'] ?? null,
+            'is_ppjk'         => (bool) ($validated['is_ppjk'] ?? false),
         ]);
 
         // 2. Cek apakah Domain sudah ada?
@@ -205,6 +207,7 @@ class PerusahaanController extends Controller
             // notify
             'notify_1' => 'nullable|string',
             'notify_2' => 'nullable|string',
+            'is_ppjk' => 'nullable|boolean',
 
             // logo
             'company_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
@@ -271,6 +274,7 @@ class PerusahaanController extends Controller
         $perusahaan->nama_perusahaan = $validated['nama_perusahaan'];
         $perusahaan->notify_1 = $validated['notify_1'] ?? null;
         $perusahaan->notify_2 = $validated['notify_2'] ?? null;
+        $perusahaan->is_ppjk = (bool) ($validated['is_ppjk'] ?? false);
         $perusahaan->save(); // Simpan semua perubahan
 
         // 6. Sync User Roles (Logic tetap sama)

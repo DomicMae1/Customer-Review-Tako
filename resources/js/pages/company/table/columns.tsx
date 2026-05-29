@@ -8,11 +8,6 @@ import { MoreHorizontal } from 'lucide-react';
 
 export const columns = (onEditClick: (perusahaan: Perusahaan) => void, onDeleteClick: (id: number) => void): ColumnDef<Perusahaan>[] => [
     {
-        accessorKey: 'nama_perusahaan',
-        header: 'Nama Perusahaan',
-        cell: ({ row }) => <div className="min-w-[150px] py-2">{row.original.nama_perusahaan}</div>,
-    },
-    {
         accessorKey: 'logo_url',
         header: 'Logo Perusahaan',
         cell: ({ row }) => {
@@ -28,6 +23,11 @@ export const columns = (onEditClick: (perusahaan: Perusahaan) => void, onDeleteC
                 </div>
             );
         },
+    },
+    {
+        accessorKey: 'nama_perusahaan',
+        header: 'Nama Perusahaan',
+        cell: ({ row }) => <div className="min-w-[150px] py-2">{row.original.nama_perusahaan}</div>,
     },
     {
         accessorKey: 'domain',
@@ -47,6 +47,13 @@ export const columns = (onEditClick: (perusahaan: Perusahaan) => void, onDeleteC
                 </div>
             );
         },
+    },
+    {
+        accessorKey: 'is_ppjk',
+        header: 'PPJK',
+        cell: ({ row }) => (
+            row.original.is_ppjk ? <Badge className="py-1">PPJK</Badge> : <Badge variant="secondary">Non-PPJK</Badge>
+        ),
     },
     {
         id: 'actions',
