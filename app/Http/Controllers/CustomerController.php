@@ -558,6 +558,7 @@ class CustomerController extends Controller
             'status_perpajakan' => 'nullable|string',
             'no_npwp' => 'nullable|string',
             'no_npwp_16' => 'nullable|string',
+            'nib' => 'nullable|string',
             'nama_pj' => 'nullable|string',
             'no_ktp_pj' => 'nullable|string',
             'no_telp_pj' => 'nullable|string',
@@ -699,6 +700,7 @@ class CustomerController extends Controller
                 'status_perpajakan' => 'nullable|string',
                 'no_npwp' => 'nullable|string',
                 'no_npwp_16' => 'nullable|string',
+                'nib' => 'nullable|string',
                 'nama_pj' => 'nullable|string',
                 'no_ktp_pj' => 'nullable|string',
                 'no_telp_pj' => 'nullable|string',
@@ -1337,6 +1339,7 @@ class CustomerController extends Controller
             'status_perpajakan' => 'nullable|string',
             'no_npwp' => 'nullable|string',
             'no_npwp_16' => 'nullable|string',
+            'nib' => 'nullable|string',
             'nama_pj' => 'nullable|string',
             'no_ktp_pj' => 'nullable|string',
             'no_telp_pj' => 'nullable|string',
@@ -1858,14 +1861,16 @@ class CustomerController extends Controller
         $alamatPenagihan = $this->getCsvValue($row, ['alamatfaktur', 'alamatpenagihan']);
         $kota = $this->getCsvValue($row, ['kotatextcustomer', 'nmmkota', 'kota', 'kotafaktur']);
         $emailPersonal = $this->sanitizeEmail($this->getCsvValue($row, ['email', 'emailpersonal', 'emailperusahaan']));
-        $npwp = $this->getCsvValue($row, ['npwp', 'nonpwp']);
+        $npwp = $this->sanitizeImportedNpwp($this->getCsvValue($row, ['npwp', 'nonpwp']));
+        $npwp16 = $this->sanitizeImportedNpwp($this->getCsvValue($row, ['npwp16', 'nonpwp16', 'npwpbaru', 'nonpwpbaru']));
+        $nib = $this->sanitizeImportedNib($this->getCsvValue($row, ['nib', 'nonib']));
         $term = $this->getCsvValue($row, ['term', 'top']);
         $keterangan = $this->getCsvValue($row, ['keterangan', 'remarks', 'note']);
         $contactPerson = $this->getCsvValue($row, ['contactperson', 'namapersonal', 'namapj']);
         $hp1 = $this->getCsvValue($row, ['hp1', 'notelppersonal', 'notelppj']);
         $hp2 = $this->getCsvValue($row, ['hp2']);
 
-        return [
+        return $this->normalizeImportedCustomerTextFields([
             'kategori_usaha' => null,
             'nama_perusahaan' => $namaPerusahaan,
             'bentuk_badan_usaha' => $this->nullIfEmpty($this->inferBentukBadanUsaha($namaPerusahaan)),
@@ -1880,9 +1885,10 @@ class CustomerController extends Controller
             'email' => null,
             'website' => $this->nullIfEmpty($this->getCsvValue($row, ['website', 'web'])),
             'top' => $this->nullIfEmpty($this->extractTermsOfPayment($term, $keterangan)),
-            'status_perpajakan' => $npwp !== '' ? 'pkp' : null,
+            'status_perpajakan' => ($npwp !== '' || $npwp16 !== '') ? 'pkp' : null,
             'no_npwp' => $this->nullIfEmpty($npwp),
-            'no_npwp_16' => $this->nullIfEmpty($this->formatNpwp16($npwp)),
+            'no_npwp_16' => $this->nullIfEmpty($this->formatNpwp16($npwp16 !== '' ? $npwp16 : $npwp)),
+            'nib' => $this->nullIfEmpty($nib),
             'nama_pj' => null,
             'no_ktp_pj' => null,
             'no_telp_pj' => null,
@@ -1890,7 +1896,7 @@ class CustomerController extends Controller
             'jabatan_personal' => null,
             'no_telp_personal' => $this->normalizeNullableArray([$hp1, $hp2]),
             'email_personal' => $this->nullIfEmpty($emailPersonal),
-        ];
+        ]);
     }
 
     private function getCsvValue(array $row, array $keys, string $default = ''): string
@@ -1920,6 +1926,38 @@ class CustomerController extends Controller
         }
 
         return $value;
+    }
+
+    private function sanitizeImportedNpwp(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $value = trim($value);
+        $value = ltrim($value, "'` \t\n\r\0\x0B");
+
+        if ($value === '') {
+            return '';
+        }
+
+        return preg_replace('/\D/', '', $value);
+    }
+
+    private function sanitizeImportedNib(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $value = trim($value);
+        $value = ltrim($value, "'` \t\n\r\0\x0B");
+
+        if ($value === '') {
+            return '';
+        }
+
+        return preg_replace('/\D/', '', $value);
     }
 
     private function sanitizeEmail(string $email): string
@@ -1992,6 +2030,46 @@ class CustomerController extends Controller
     private function mergeImportedCustomerData(Customer $customer, array $payload): array
     {
         return $payload;
+    }
+
+    private function normalizeImportedCustomerTextFields(array $payload): array
+    {
+        $fieldsToNormalize = [
+            'kategori_usaha',
+            'nama_perusahaan',
+            'bentuk_badan_usaha',
+            'alamat_lengkap',
+            'kota',
+            'alamat_penagihan',
+            'nama_pj',
+            'nama_personal',
+            'jabatan_personal',
+        ];
+
+        foreach ($fieldsToNormalize as $field) {
+            if (!array_key_exists($field, $payload)) {
+                continue;
+            }
+
+            $payload[$field] = $this->normalizeImportedTitleCase($payload[$field]);
+        }
+
+        return $payload;
+    }
+
+    private function normalizeImportedTitleCase($value): mixed
+    {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        return mb_convert_case(mb_strtolower($value, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
     }
 
     private function ensureCustomerStatusExists(int $customerId, int $userId): void

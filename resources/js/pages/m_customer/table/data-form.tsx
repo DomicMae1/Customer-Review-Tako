@@ -47,6 +47,7 @@ export default function CustomerForm({
         status_perpajakan: customer?.status_perpajakan || '',
         no_npwp: customer?.no_npwp || '',
         no_npwp_16: customer?.no_npwp_16 || '',
+        nib: customer?.nib || '',
         nama_pj: customer?.nama_pj || '',
         no_ktp_pj: customer?.no_ktp_pj || '',
         no_telp_pj: customer?.no_telp_pj || '',
@@ -96,6 +97,7 @@ export default function CustomerForm({
         top?: string;
         no_npwp?: string;
         no_npwp_16?: string;
+        nib?: string;
         nama_pj?: string;
         no_ktp_pj?: string;
         no_telp_pj?: string;
@@ -822,6 +824,8 @@ export default function CustomerForm({
                                 )}
                             />
                         </div>
+
+
                     </div>
                     <div className="col-span-3 mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                         <h1 className="text-xl font-semibold">Data Direktur</h1>

@@ -35,6 +35,7 @@ class Customer extends Model
         'status_perpajakan',
         'no_npwp',
         'no_npwp_16',
+        'nib',
         'nama_pj',
         'no_ktp_pj',
         'no_telp_pj',

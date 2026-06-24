@@ -80,3 +80,9 @@ TRUNCATE TABLE customers RESTART IDENTITY CASCADE;
 ```bash
 php artisan db:drop-tako
 ```
+
+```bash
+php artisan migrate --database=tako-perusahaan --path=database/migrations/perusahaan
+
+php artisan migrate --database=tako-customer --path=database/migrations/customer
+```
