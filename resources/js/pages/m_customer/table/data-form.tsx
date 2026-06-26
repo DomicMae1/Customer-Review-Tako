@@ -80,8 +80,13 @@ export default function CustomerForm({
 
     const [isLoading, setIsLoading] = useState(false);
 
-    const [lainKategori, setLainKategori] = useState('');
-    const [showLainKategori, setShowLainKategori] = useState(false);
+    const [lainKategori, setLainKategori] = useState(() => {
+        const isCustom = customer?.kategori_usaha && !['kontraktor', 'toko', 'industri', 'dealer'].includes(customer.kategori_usaha);
+        return isCustom ? customer.kategori_usaha : '';
+    });
+    const [showLainKategori, setShowLainKategori] = useState(() => {
+        return !!(customer?.kategori_usaha && !['kontraktor', 'toko', 'industri', 'dealer'].includes(customer.kategori_usaha));
+    });
 
     const [errors_kategori, setErrors] = useState<{
         kategori_usaha?: string;
@@ -168,6 +173,10 @@ export default function CustomerForm({
 
     useEffect(() => {
         if (!customer) return;
+
+        const isCustom = customer.kategori_usaha && !['kontraktor', 'toko', 'industri', 'dealer'].includes(customer.kategori_usaha);
+        setLainKategori(isCustom ? customer.kategori_usaha : '');
+        setShowLainKategori(!!isCustom);
 
         const setStatus = (attachment: any | undefined, setState: (s: any[]) => void, type: string) => {
             if (attachment && attachment.path && !attachment.path.startsWith('blob:')) {
