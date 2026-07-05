@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CustomerLink;
+use App\Models\SupplierLink;
 use App\Models\Perusahaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,7 +11,7 @@ use Spatie\Permission\Exceptions\UnauthorizedException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class CustomerLinkController extends Controller
+class SupplierLinkController extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -36,22 +36,22 @@ class CustomerLinkController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->can('customer.link.create')) {
-            throw UnauthorizedException::forPermissions(['customer.link.create']);
+        if (!$user->can('supplier.link.create')) {
+            throw UnauthorizedException::forPermissions(['supplier.link.create']);
         }
 
         $role = $user->roles->first()?->name ?? null;
 
         $validated = $request->validate([
-            'nama_customer' => 'required|string|max:255',
-            'token' => 'nullable|string|max:255|unique:customer_links,token',
+            'nama_supplier' => 'required|string|max:255',
+            'token' => 'nullable|string|max:255|unique:supplier_links,token',
             'id_perusahaan' => 'nullable|integer',
         ]);
 
         $token = $validated['token'] ?? Str::random(12);
         $id_perusahaan = null;
 
-        if ($role === 'user') {
+        if ($role === 'marketing' || $role === 'user') {
             $id_perusahaan = $user->id_perusahaan;
             if (!$id_perusahaan) {
                 return response()->json(['message' => 'User tidak memiliki ID perusahaan.'], 422);
@@ -90,15 +90,15 @@ class CustomerLinkController extends Controller
             return response()->json(['message' => 'Domain belum disetting (ID Domain null).'], 404);
         }
 
-        $companyDomainString = $perusahaan->domain->domain; // Akses properti 'domain' dari model Domain
+        $companyDomainString = $perusahaan->domain->domain;
 
         // 3. Generate URL
         $protocol = app()->isProduction() ? 'https://' : ($request->secure() ? 'https://' : 'http://');
-        $generatedUrl = "{$protocol}{$companyDomainString}/form/{$token}";
+        $generatedUrl = "{$protocol}{$companyDomainString}/form-supplier/{$token}";
 
-        $link = CustomerLink::on('tako-perusahaan')->create([
+        $link = SupplierLink::on('tako-perusahaan')->create([
             'id_user' => $user->id,
-            'nama_customer' => $validated['nama_customer'],
+            'nama_supplier' => $validated['nama_supplier'],
             'token' => $token,
             'url' => $generatedUrl,
             'id_perusahaan' => $id_perusahaan,
@@ -112,7 +112,7 @@ class CustomerLinkController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(CustomerLink $customerLink)
+    public function show(SupplierLink $supplierLink)
     {
         //
     }
@@ -120,7 +120,7 @@ class CustomerLinkController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(CustomerLink $customerLink)
+    public function edit(SupplierLink $supplierLink)
     {
         //
     }
@@ -128,7 +128,7 @@ class CustomerLinkController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, CustomerLink $customerLink)
+    public function update(Request $request, SupplierLink $supplierLink)
     {
         //
     }
@@ -136,7 +136,7 @@ class CustomerLinkController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(CustomerLink $customerLink)
+    public function destroy(SupplierLink $supplierLink)
     {
         //
     }

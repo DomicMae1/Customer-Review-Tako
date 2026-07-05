@@ -68,6 +68,14 @@ return [
             'throw' => false,
         ],
 
+        'suppliers_external' => [
+            'driver' => 'local',
+            'root' => '/mnt/Customer_Registration',
+            'url' => env('APP_URL') . '/storage/external',
+            'visibility' => 'public',
+            'throw' => false,
+        ],
+
     ],
 
     /*

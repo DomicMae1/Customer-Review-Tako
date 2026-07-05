@@ -74,6 +74,26 @@ class HandleInertiaRequests extends Middleware
                 'name' => session('company_name'),
                 'logo' => session('company_logo'), // sudah asset('storage/...') dari controller login
             ],
+
+            // Admin company selector: daftar semua perusahaan dan pilihan aktif
+            'all_companies' => function () use ($request) {
+                $user = $request->user();
+                if (!$user || !$user->hasRole('admin')) {
+                    return [];
+                }
+                return \App\Models\Perusahaan::select('id', 'nama_perusahaan')
+                    ->orderBy('nama_perusahaan')
+                    ->get()
+                    ->toArray();
+            },
+            'admin_active_company_id' => function () use ($request) {
+                $user = $request->user();
+                if (!$user || !$user->hasRole('admin')) {
+                    return null;
+                }
+                return session('admin_active_company_id');
+            },
+
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

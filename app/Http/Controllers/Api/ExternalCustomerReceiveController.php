@@ -39,6 +39,13 @@ class ExternalCustomerReceiveController extends Controller
             ], 401);
         }
 
+        if (!$user->can('customer.create')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Lacking customer.create permission.',
+            ], 403);
+        }
+
         $idPerusahaan = $user->id_perusahaan;
 
         if (!$idPerusahaan) {
@@ -73,7 +80,7 @@ class ExternalCustomerReceiveController extends Controller
             'bentuk_badan_usaha' => 'required|string',
             'alamat_lengkap' => 'required|string',
             'kota' => 'required|string',
-            'no_telp' => 'nullable|string',
+            'no_telp' => 'nullable',
             'no_fax' => 'nullable|string',
             'alamat_penagihan' => 'required|string',
             'email' => 'required|email',
@@ -90,7 +97,7 @@ class ExternalCustomerReceiveController extends Controller
 
             'nama_personal' => 'nullable|string',
             'jabatan_personal' => 'nullable|string',
-            'no_telp_personal' => 'nullable|string',
+            'no_telp_personal' => 'nullable',
             'email_personal' => 'nullable|email',
 
             // Attachment inputs (PDF only, max 5MB)
@@ -118,6 +125,32 @@ class ExternalCustomerReceiveController extends Controller
             'no_telp_pj', 'nama_personal', 'jabatan_personal', 'no_telp_personal', 'email_personal'
         ];
         $customerData = array_intersect_key($validated, array_flip($customerFields));
+
+        if (isset($customerData['no_npwp_16']) && $customerData['no_npwp_16'] !== '') {
+            $digits16 = preg_replace('/\D/', '', (string) $customerData['no_npwp_16']);
+            if (strlen($digits16) === 16) {
+                $customerData['no_npwp_16'] = substr($digits16, 0, 4) . ' ' .
+                                              substr($digits16, 4, 4) . ' ' .
+                                              substr($digits16, 8, 4) . ' ' .
+                                              substr($digits16, 12, 4);
+            } else {
+                $customerData['no_npwp_16'] = $digits16;
+            }
+        }
+
+        if (isset($customerData['no_npwp']) && $customerData['no_npwp'] !== '') {
+            $digits15 = preg_replace('/\D/', '', (string) $customerData['no_npwp']);
+            if (strlen($digits15) === 15) {
+                $customerData['no_npwp'] = substr($digits15, 0, 2) . '.' .
+                                           substr($digits15, 2, 3) . '.' .
+                                           substr($digits15, 5, 3) . '-' .
+                                           substr($digits15, 8, 1) . '.' .
+                                           substr($digits15, 9, 3) . '.' .
+                                           substr($digits15, 12, 3);
+            } else {
+                $customerData['no_npwp'] = $digits15;
+            }
+        }
 
         $filesToDeleteOnRollback = [];
         $uploadedFilesInfo = [];
