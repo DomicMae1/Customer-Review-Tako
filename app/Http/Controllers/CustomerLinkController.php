@@ -36,8 +36,8 @@ class CustomerLinkController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasPermissionTo('view-master-customer')) {
-            throw UnauthorizedException::forPermissions(['view-master-customer']);
+        if (!$user->can('customer.link.create')) {
+            throw UnauthorizedException::forPermissions(['customer.link.create']);
         }
 
         $role = $user->roles->first()?->name ?? null;

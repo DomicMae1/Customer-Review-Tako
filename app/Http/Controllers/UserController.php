@@ -26,8 +26,8 @@ class UserController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasRole('admin')) {
-            abort(403, 'Unauthorized access. Only admin can access this page.');
+        if (!$user->can('user.view')) {
+            abort(403, 'Unauthorized access.');
         }
 
         $users = User::with('roles')->get();
@@ -53,6 +53,10 @@ class UserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $currentUser = Auth::user();
+        if (!$currentUser->can('user.create')) {
+            abort(403, 'Unauthorized access.');
+        }
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'NIK' => ['required', 'digits:16'],
@@ -104,6 +108,10 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user): RedirectResponse
     {
+        $currentUser = Auth::user();
+        if (!$currentUser->can('user.update')) {
+            abort(403, 'Unauthorized access.');
+        }
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'uid' => ['required', 'digits:8', 'unique:users,uid,' . $user->id],
@@ -133,7 +141,7 @@ class UserController extends Controller
 
             $role = Role::findOrFail($validated['role']);
 
-            if ($role->name === 'user') {
+            if ($role->name === 'marketing' || $role->name === 'user') {
                 $data['id_perusahaan'] = $validated['id_perusahaan'];
             } else {
                 $data['id_perusahaan'] = null;
@@ -159,12 +167,20 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
+        $currentUser = Auth::user();
+        if (!$currentUser->can('user.delete')) {
+            abort(403, 'Unauthorized access.');
+        }
         $user->delete();
         return redirect()->route('users.index')->with('message', 'User deleted successfully.');
     }
 
     public function importCsv(Request $request)
     {
+        $currentUser = Auth::user();
+        if (!$currentUser->can('user.import')) {
+            abort(403, 'Unauthorized access.');
+        }
         $request->validate([
             'csv_file' => ['required', 'file', 'mimes:csv,txt'],
         ]);
@@ -302,6 +318,10 @@ class UserController extends Controller
 
     public function resetPassword(User $user): RedirectResponse
     {
+        $currentUser = Auth::user();
+        if (!$currentUser->can('user.reset-password')) {
+            abort(403, 'Unauthorized access.');
+        }
         try {
             if (!$user->NIK) {
                 return redirect()
