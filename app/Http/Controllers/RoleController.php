@@ -18,18 +18,23 @@ class RoleController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasRole('admin')) {
-            abort(403, 'Unauthorized access. Only admin can access this page.');
+        if (!$user->can('role.view')) {
+            abort(403, 'Unauthorized access.');
         }
 
-        $roles = Role::with('permissions')->get();
+        $roles = Role::with('permissions')->where('name', '!=', 'admin')->get();
 
-        $permissions = Permission::all()->groupBy(function ($permission) {
-            $parts = explode('-', $permission->name, 2);
-            return $parts[1] ?? 'other';
-        })->map(function ($group) {
-            return $group->pluck('name')->toArray();
-        })->toArray();
+        // Hanya tampilkan dot-notation permissions di form UI.
+        // Legacy permissions (format lama dengan '-') tetap ada di database dan
+        // tidak terpengaruh — role yang sudah memilikinya tetap berfungsi normal.
+        $permissions = Permission::all()
+            ->filter(fn ($permission) => str_contains($permission->name, '.'))
+            ->groupBy(function ($permission) {
+                // Ambil prefix sebelum titik pertama sebagai nama grup
+                return explode('.', $permission->name, 2)[0];
+            })
+            ->map(fn ($group) => $group->pluck('name')->values()->toArray())
+            ->toArray();
 
         return Inertia::render('role/page', [
             'roles' => $roles,
@@ -54,6 +59,10 @@ class RoleController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$user->can('role.create')) {
+            abort(403, 'Unauthorized access.');
+        }
         $request->validate([
             'name' => 'required|string|unique:roles,name',
             'permissions' => 'array',
@@ -89,7 +98,14 @@ class RoleController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = Auth::user();
+        if (!$user->can('role.update')) {
+            abort(403, 'Unauthorized access.');
+        }
         $role = Role::findOrFail($id);
+        if ($role->name === 'admin') {
+            abort(403, 'Unauthorized access.');
+        }
 
         $request->validate([
             'name' => 'required|string|unique:roles,name,' . $id,
@@ -108,7 +124,14 @@ class RoleController extends Controller
      */
     public function destroy($id)
     {
+        $user = Auth::user();
+        if (!$user->can('role.delete')) {
+            abort(403, 'Unauthorized access.');
+        }
         $role = Role::findOrFail($id);
+        if ($role->name === 'admin') {
+            abort(403, 'Unauthorized access.');
+        }
 
         $role->delete();
         return redirect()->route('role-manager.index')->with('success', 'Role deleted successfully.');

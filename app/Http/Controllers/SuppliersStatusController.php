@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
-use App\Models\CustomerAttach;
-use App\Models\Customers_Status;
+use App\Models\Supplier;
+use App\Models\SupplierAttach;
+use App\Models\SuppliersStatus;
 use App\Models\Perusahaan;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -18,26 +18,26 @@ use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
 use Illuminate\Support\Facades\DB;
 
-class CustomersStatusController extends Controller
+class SuppliersStatusController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $customerId = $request->query('customer_id');
+        $supplierId = $request->query('supplier_id');
 
-        if (!$customerId) {
-            return response()->json(['error' => 'Customer ID is required.'], 400);
+        if (!$supplierId) {
+            return response()->json(['error' => 'Supplier ID is required.'], 400);
         }
 
-        $status = Customers_Status::with([
+        $status = SuppliersStatus::with([
             'user',
             'status1Approver',
             'status2Approver',
             'status3Approver',
             'status4Approver',
-        ])->where('id_Customer', $customerId)->first();
+        ])->where('id_Supplier', $supplierId)->first();
 
         if (!$status) {
             return response()->json(['message' => 'Status belum tersedia.'], 404);
@@ -53,54 +53,35 @@ class CustomersStatusController extends Controller
         return response()->json($statusData);
     }
 
-
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
-    {
-        //
-    }
+    public function create() {}
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
-    {
-        //
-    }
+    public function store(Request $request) {}
 
     /**
      * Display the specified resource.
      */
-    public function show(Customers_Status $customers_Status)
-    {
-        //
-    }
+    public function show(SuppliersStatus $suppliersStatus) {}
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Customers_Status $customers_Status)
-    {
-        //
-    }
+    public function edit(SuppliersStatus $suppliersStatus) {}
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Customers_Status $customers_Status)
-    {
-        //
-    }
+    public function update(Request $request, SuppliersStatus $suppliersStatus) {}
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Customers_Status $customers_Status)
-    {
-        //
-    }
+    public function destroy(SuppliersStatus $suppliersStatus) {}
 
     private function nullableInt($value): ?int
     {
@@ -116,16 +97,16 @@ class CustomersStatusController extends Controller
         return (int) $value;
     }
 
-    private function hasExistingNpwpRegistration(Customer $customer): bool
+    private function hasExistingNpwpRegistration(Supplier $supplier): bool
     {
-        $query = Customer::whereKeyNot($customer->id);
+        $query = Supplier::whereKeyNot($supplier->id);
 
-        if (!empty($customer->uid)) {
-            return $query->where('uid', $customer->uid)->exists();
+        if (!empty($supplier->uid)) {
+            return $query->where('uid', $supplier->uid)->exists();
         }
 
-        $noNpwp = trim((string) $customer->no_npwp);
-        $noNpwp16 = trim((string) $customer->no_npwp_16);
+        $noNpwp = trim((string) $supplier->no_npwp);
+        $noNpwp16 = trim((string) $supplier->no_npwp_16);
 
         if ($noNpwp === '' && $noNpwp16 === '') {
             return false;
@@ -187,7 +168,7 @@ class CustomersStatusController extends Controller
     private function getProblematicNpwpRecipientEmails(?Perusahaan $perusahaan, string $submitterRole): array
     {
         $rolesToNotify = match ($submitterRole) {
-            'marketing' => ['manager', 'direktur', 'auditor'],
+            'marketing', 'user' => ['manager', 'direktur', 'auditor'],
             'manager' => ['direktur', 'auditor'],
             'direktur' => ['auditor'],
             default => [],
@@ -214,9 +195,8 @@ class CustomersStatusController extends Controller
 
     public function submit(Request $request)
     {
-
         $request->validate([
-            'customer_id' => 'required|exists:tako-perusahaan.customers_statuses,id_Customer',
+            'supplier_id' => 'required|exists:tako-perusahaan.suppliers_statuses,id_Supplier',
             'keterangan' => 'nullable|string',
             'attach_path'         => 'nullable|string',
             'attach_filename'     => 'nullable|string',
@@ -225,12 +205,12 @@ class CustomersStatusController extends Controller
             'status_2_timestamps' => 'nullable|date',
         ]);
 
-        $status = Customers_Status::where('id_Customer', $request->customer_id)->first();
-        if (!$status) return back()->with('error', 'Data status customer tidak ditemukan.');
+        $status = SuppliersStatus::where('id_Supplier', $request->supplier_id)->first();
+        if (!$status) return back()->with('error', 'Data status supplier tidak ditemukan.');
 
-        $customer = $status->customer;
+        $supplier = $status->supplier;
         $wasSubmittedToWorkflow = !empty($status->submit_1_timestamps);
-        $isFirstNpwpRegistration = !$this->hasExistingNpwpRegistration($customer);
+        $isFirstNpwpRegistration = !$this->hasExistingNpwpRegistration($supplier);
 
         // 1. Ambil Info Perusahaan untuk Folder Name
         $idPerusahaan = $request->input('id_perusahaan');
@@ -246,12 +226,6 @@ class CustomersStatusController extends Controller
             if (!empty($perusahaan->notify_1)) {
                 $emailsToNotify = explode(',', $perusahaan->notify_1);
             }
-        }
-
-        $status = Customers_Status::where('id_Customer', $request->customer_id)->first();
-
-        if (!$status) {
-            return back()->with('error', 'Data status customer tidak ditemukan.');
         }
 
         $user = Auth::user();
@@ -272,27 +246,27 @@ class CustomersStatusController extends Controller
 
         switch ($role) {
             case 'marketing':
-                if (!$user->can('customer.create') && !$user->can('customer.update')) {
-                    abort(403, 'Unauthorized. Lacking customer creation or update permission.');
+                if (!$user->can('supplier.create') && !$user->can('supplier.update')) {
+                    abort(403, 'Unauthorized. Lacking supplier creation or update permission.');
                 }
                 break;
             case 'manager':
-                if (!$user->can('customer.approve.manager')) {
+                if (!$user->can('supplier.approve.manager')) {
                     abort(403, 'Unauthorized. Lacking manager approval permission.');
                 }
                 break;
             case 'direktur':
-                if (!$user->can('customer.approve.direktur')) {
+                if (!$user->can('supplier.approve.direktur')) {
                     abort(403, 'Unauthorized. Lacking direktur approval permission.');
                 }
                 break;
             case 'lawyer':
-                if (!$user->can('customer.approve.lawyer')) {
+                if (!$user->can('supplier.approve.lawyer')) {
                     abort(403, 'Unauthorized. Lacking lawyer approval permission.');
                 }
                 break;
             case 'auditor':
-                if (!$user->can('customer.approve.auditor')) {
+                if (!$user->can('supplier.approve.auditor')) {
                     abort(403, 'Unauthorized. Lacking auditor approval permission.');
                 }
                 break;
@@ -304,28 +278,27 @@ class CustomersStatusController extends Controller
 
         $triggerRoles = ['marketing', 'manager', 'direktur'];
 
-        $problematicCustomer = null;
+        $problematicSupplier = null;
         $problematicStatus = null;
 
         // Cek apakah User yang submit termasuk role tersebut
         if (in_array($role, $triggerRoles)) {
 
-            $potentialDuplicates = Customer::with('perusahaan') // Only eager load same-db relations
-                ->whereKeyNot($customer->id)
-                ->where(function ($q) use ($customer) {
-                    $q->where('no_npwp', $customer->no_npwp)
-                        ->when($customer->no_npwp_16, fn($sq) => $sq->orWhere('no_npwp_16', $customer->no_npwp_16));
+            $potentialDuplicates = Supplier::with('perusahaan')
+                ->whereKeyNot($supplier->id)
+                ->where(function ($q) use ($supplier) {
+                    $q->where('no_npwp', $supplier->no_npwp)
+                        ->when($supplier->no_npwp_16, fn($sq) => $sq->orWhere('no_npwp_16', $supplier->no_npwp_16));
                 })
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            $problematicCustomer = null;
+            $problematicSupplier = null;
 
             // 2. Loop and check status manually
             foreach ($potentialDuplicates as $duplicate) {
-                // Explicitly use the correct model and connection
-                $dupStatus = \App\Models\Customers_Status::on('tako-perusahaan')
-                    ->where('id_Customer', $duplicate->id)
+                $dupStatus = SuppliersStatus::on('tako-perusahaan')
+                    ->where('id_Supplier', $duplicate->id)
                     ->first();
 
                 if (!$dupStatus) continue;
@@ -337,42 +310,40 @@ class CustomersStatusController extends Controller
                     && trim($dupStatus->status_4_keterangan) != '';
 
                 if ($isRejected || $hasAuditorNote) {
-                    // We found a problematic one!
-                    // Manually attach the status to the duplicate object so the email view can use it
                     $duplicate->setRelation('status', $dupStatus);
-                    $problematicCustomer = $duplicate;
+                    $problematicSupplier = $duplicate;
                     break;
                 }
             }
 
-            $problematicStatus = $problematicCustomer?->status;
+            $problematicStatus = $problematicSupplier?->status;
 
             // Jika ditemukan data lama yang bermasalah, KIRIM EMAIL
-            if ($problematicCustomer) {
+            if ($problematicSupplier) {
                 $validEmails = $this->getProblematicNpwpRecipientEmails($perusahaan, $role);
 
                 if (!empty($validEmails)) {
-                    Log::info('Mengirim Alert Duplikat NPWP', [
+                    Log::info('Mengirim Alert Duplikat NPWP Supplier', [
                         'submitted_by_role' => $role,
-                        'customer_id' => $customer->id,
+                        'supplier_id' => $supplier->id,
                         'company_id' => $perusahaan?->id,
                         'recipient_emails' => $validEmails,
                     ]);
 
                     try {
-                        Mail::to($validEmails)->send(new \App\Mail\CustomerAlert(
+                        Mail::to($validEmails)->send(new \App\Mail\SupplierAlert(
                             $user,                                                      // User yang submit
-                            $customer,                                                  // Customer baru
-                            $problematicCustomer,                                       // Customer lama
-                            $problematicCustomer->status,
+                            $supplier,                                                  // Supplier baru
+                            $problematicSupplier,                                       // Supplier lama
+                            $problematicSupplier->status,
                         ));
                     } catch (\Exception $e) {
-                        Log::error("Gagal kirim email alert duplikat: " . $e->getMessage());
+                        Log::error("Gagal kirim email alert duplikat supplier: " . $e->getMessage());
                     }
                 } else {
-                    Log::warning('Alert Duplikat NPWP tidak dikirim karena tidak ada email penerima yang valid.', [
+                    Log::warning('Alert Duplikat NPWP Supplier tidak dikirim karena tidak ada email penerima yang valid.', [
                         'submitted_by_role' => $role,
-                        'customer_id' => $customer->id,
+                        'supplier_id' => $supplier->id,
                         'company_id' => $perusahaan?->id,
                     ]);
                 }
@@ -388,8 +359,8 @@ class CustomersStatusController extends Controller
             $status->status_2_timestamps = $request->input('status_2_timestamps');
             $status->status_2_by = $userId;
         }
-        $isDirekturCreator = ($customer->id_user === $userId && $role === 'direktur');
-        $isManagerCreator = ($customer->id_user === $userId && $role === 'manager');
+        $isDirekturCreator = ($supplier->id_user === $userId && $role === 'direktur');
+        $isManagerCreator = ($supplier->id_user === $userId && $role === 'manager');
 
         $finalFilename = $request->input('attach_filename');
         $finalPath = $request->input('attach_path');
@@ -406,22 +377,6 @@ class CustomersStatusController extends Controller
                     $status->submit_1_nama_file = $finalFilename;
                     $status->submit_1_path = $finalPath;
                 }
-
-                // 🔹 Kirim email hanya jika perusahaan TIDAK punya manager
-                // if ($perusahaan && !$perusahaan->hasManager()) {
-                //     if (!empty($perusahaan->notify_1)) {
-                //         $emailsToNotify = explode(',', $perusahaan->notify_1);
-                //     }
-
-                //     if (!empty($emailsToNotify)) {
-                //         try {
-                //             Mail::to($emailsToNotify)->send(new \App\Mail\CustomerSubmittedMail($customer));
-                //         } catch (\Exception $e) {
-                //             Log::error("Gagal kirim email lawyer (tanpa manager): " . $e->getMessage());
-                //         }
-                //     }
-                // }
-
                 break;
 
             case 'manager':
@@ -437,19 +392,6 @@ class CustomersStatusController extends Controller
                         $status->submit_1_timestamps = $now;
                     }
                 }
-                // if ($perusahaan && $perusahaan->hasManager()) {
-                //     if (!empty($perusahaan->notify_1)) {
-                //         $emailsToNotify = explode(',', $perusahaan->notify_1);
-                //     }
-
-                //     if (!empty($emailsToNotify)) {
-                //         try {
-                //             Mail::to($emailsToNotify)->send(new \App\Mail\CustomerSubmittedMail($customer));
-                //         } catch (\Exception $e) {
-                //             Log::error("Gagal kirim email lawyer (setelah manager): " . $e->getMessage());
-                //         }
-                //     }
-                // }
                 break;
 
             case 'direktur':
@@ -497,14 +439,12 @@ class CustomersStatusController extends Controller
                             ->unique()
                             ->toArray();
 
-                        Log::info('Akan mengirim email ke:', $validEmails);
-
-                        $customer = $status->customer;
+                        Log::info('Supplier rejected, sending emails to:', $validEmails);
 
                         if (!empty($validEmails)) {
-                            Mail::to($validEmails)->send(new \App\Mail\StatusRejectedMail($status, $user, $customer));
+                            Mail::to($validEmails)->send(new \App\Mail\SupplierStatusRejectedMail($status, $user, $supplier));
                         } else {
-                            Mail::to('default@example.com')->send(new \App\Mail\StatusRejectedMail($status, $user, $customer));
+                            Mail::to('default@example.com')->send(new \App\Mail\SupplierStatusRejectedMail($status, $user, $supplier));
                         }
                     }
                 }
@@ -574,38 +514,27 @@ class CustomersStatusController extends Controller
             $status->status_4_timestamps = $problematicStatus?->status_4_timestamps ?? $now;
         }
 
-        Log::info('Submit payload check', [
+        Log::info('Supplier Submit payload check', [
             'id_perusahaan' => $request->input('id_perusahaan'),
             'status_3_by' => $request->input('status_3_by'),
             'status_4_by' => $request->input('status_4_by'),
-            'customer_id' => $request->input('customer_id'),
+            'supplier_id' => $request->input('supplier_id'),
         ]);
 
         $shouldNotifyAuditorForNewNpwp = !$wasSubmittedToWorkflow
             && !empty($status->submit_1_timestamps)
             && $isFirstNpwpRegistration;
 
-        Log::info('Auditor email NPWP decision', [
-            'customer_id' => $customer->id,
-            'customer_uid' => $customer->uid,
-            'no_npwp' => $customer->no_npwp,
-            'no_npwp_16' => $customer->no_npwp_16,
+        Log::info('Auditor email NPWP supplier decision', [
+            'supplier_id' => $supplier->id,
+            'supplier_uid' => $supplier->uid,
+            'no_npwp' => $supplier->no_npwp,
+            'no_npwp_16' => $supplier->no_npwp_16,
             'submitted_by_role' => $role,
             'was_submitted_to_workflow' => $wasSubmittedToWorkflow,
             'submit_1_timestamps' => $status->submit_1_timestamps,
             'is_first_npwp_registration' => $isFirstNpwpRegistration,
             'should_notify_auditor_for_new_npwp' => $shouldNotifyAuditorForNewNpwp,
-            'reason' => $shouldNotifyAuditorForNewNpwp
-                ? 'Email auditor akan dikirim karena NPWP baru pertama kali terdaftar.'
-                : (
-                    $wasSubmittedToWorkflow
-                        ? 'Email auditor tidak dikirim karena customer ini sudah pernah masuk workflow.'
-                        : (
-                            empty($status->submit_1_timestamps)
-                                ? 'Email auditor tidak dikirim karena submit awal workflow belum terjadi.'
-                                : 'Email auditor tidak dikirim karena NPWP sudah pernah terdaftar sebelumnya.'
-                        )
-                ),
         ]);
 
         $status->save();
@@ -622,21 +551,16 @@ class CustomersStatusController extends Controller
                     ->toArray();
 
                 if (!empty($auditorEmails)) {
-                    Log::info('Mengirim email auditor untuk NPWP baru', [
-                        'customer_id' => $customer->id,
-                        'customer_uid' => $customer->uid,
+                    Log::info('Mengirim email auditor untuk NPWP supplier baru', [
+                        'supplier_id' => $supplier->id,
+                        'supplier_uid' => $supplier->uid,
                         'auditor_emails' => $auditorEmails,
                     ]);
 
-                    Mail::to($auditorEmails)->send(new \App\Mail\NewCustomerAuditorMail($customer, $status, $user));
-                } else {
-                    Log::warning('Email auditor untuk NPWP baru tidak dikirim karena daftar email auditor kosong.', [
-                        'customer_id' => $customer->id,
-                        'customer_uid' => $customer->uid,
-                    ]);
+                    Mail::to($auditorEmails)->send(new \App\Mail\NewSupplierAuditorMail($supplier, $status, $user));
                 }
             } catch (\Exception $e) {
-                Log::error('Gagal kirim email customer baru ke auditor: ' . $e->getMessage());
+                Log::error('Gagal kirim email supplier baru ke auditor: ' . $e->getMessage());
             }
         }
 

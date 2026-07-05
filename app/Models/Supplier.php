@@ -7,20 +7,21 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Perusahaan;
-use App\Models\CustomerAttach;
+use App\Models\SupplierAttach;
 use Illuminate\Support\Str;
 
-class Customer extends Model
+class Supplier extends Model
 {
     use SoftDeletes;
 
     protected $connection = 'tako-customer';
-    protected $table = 'customers';
+    protected $table = 'suppliers';
     protected $primaryKey = 'id';
 
     protected $fillable = [
         'id_user',
         'id_perusahaan',
+        'supplier_category',
         'kategori_usaha',
         'nama_perusahaan',
         'bentuk_badan_usaha',
@@ -140,19 +141,19 @@ class Customer extends Model
 
     protected static function booted()
     {
-        static::creating(function ($customer) {
+        static::creating(function ($supplier) {
             $existingUid = null;
 
-            if (!empty($customer->no_npwp) || !empty($customer->no_npwp_16)) {
+            if (!empty($supplier->no_npwp) || !empty($supplier->no_npwp_16)) {
                  $existingUid = DB::connection('tako-customer')
-                    ->table('customers')
+                    ->table('suppliers')
                     ->whereNotNull('uid')
-                    ->where(function($q) use ($customer) {
-                        if (!empty($customer->no_npwp)) {
-                            $q->orWhere('no_npwp', trim($customer->no_npwp));
+                    ->where(function($q) use ($supplier) {
+                        if (!empty($supplier->no_npwp)) {
+                            $q->orWhere('no_npwp', trim($supplier->no_npwp));
                         }
-                        if (!empty($customer->no_npwp_16)) {
-                            $q->orWhere('no_npwp_16', trim($customer->no_npwp_16));
+                        if (!empty($supplier->no_npwp_16)) {
+                            $q->orWhere('no_npwp_16', trim($supplier->no_npwp_16));
                         }
                     })
                     ->orderBy('created_at', 'asc') 
@@ -160,7 +161,7 @@ class Customer extends Model
             }
 
             if ($existingUid) {
-                $customer->uid = $existingUid;
+                $supplier->uid = $existingUid;
                 return; 
             }
 
@@ -174,7 +175,7 @@ class Customer extends Model
                 $random = random_int(100000, 999999);
                 $candidateUid = $prefix . $random;
                 $exists = DB::connection('tako-customer')
-                            ->table('customers')
+                            ->table('suppliers')
                             ->where('uid', $candidateUid)
                             ->exists();
                 
@@ -188,7 +189,7 @@ class Customer extends Model
 
             } while ($uid === null);
 
-            $customer->uid = $uid;
+            $supplier->uid = $uid;
         });
     }
 
@@ -209,21 +210,21 @@ class Customer extends Model
     }
 
     /**
-     * Relasi ke lampiran dokumen customer.
+     * Relasi ke lampiran dokumen supplier.
      */
     public function attachments()
     {
-        return $this->hasMany(CustomerAttach::class, 'customer_id', 'id');
+        return $this->hasMany(SupplierAttach::class, 'supplier_id', 'id');
     }
 
     public function status()
     {
-        return $this->hasOne(Customers_Status::class, 'id_Customer');
+        return $this->hasOne(SuppliersStatus::class, 'id_Supplier');
     }
 
-    public function customer_links()
+    public function supplier_links()
     {
-        return $this->hasOne(CustomerLink::class, 'id_customer');
+        return $this->hasOne(SupplierLink::class, 'id_supplier');
     }
 
     private function normalizePhoneNumbers($value): array
