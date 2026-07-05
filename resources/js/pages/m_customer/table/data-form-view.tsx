@@ -52,7 +52,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
     const creatorId = customer?.id_user;
     const currentUserId = props.auth.user?.id;
-    const creatorRole = customer?.creator_role || 'user';
+    const creatorRole = customer?.creator_role || 'marketing';
     const isCreator = creatorId === currentUserId;
 
     const rawRole = props.auth.user.roles?.[0]?.name as string;
@@ -104,7 +104,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
         fetchManagerStatus();
     }, [customer.id_perusahaan, statusData?.submit_1_timestamps]);
 
-    const showUserSubmit = isCreator && userRole === 'user' && !statusData?.submit_1_timestamps;
+    const showUserSubmit = isCreator && userRole === 'marketing' && !statusData?.submit_1_timestamps;
 
     const showAnotherUserSubmit = isCreator && (userRole === 'manager' || userRole === 'direktur') && !statusData?.submit_1_timestamps;
 
@@ -311,7 +311,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
         let activeFile = null;
         let fileType = 'document';
 
-        if (userRole === 'user') {
+        if (userRole === 'marketing') {
             activeFile = attachFileUser;
             fileType = 'lampiran_marketing'; // Type untuk user
         } else if (showExtraFields) {
@@ -461,7 +461,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
             <div className="space-y-6">
                 {/* 🔹 Informasi Usaha */}
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <div>
                         <Label htmlFor="kategori_usaha">Kategori Usaha</Label>
                         <Input
@@ -485,6 +485,15 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         <Input
                             id="bentuk_badan_usaha"
                             value={customer.bentuk_badan_usaha}
+                            disabled
+                            className="w-full border border-gray-300 dark:border-neutral-600 dark:text-white"
+                        />
+                    </div>
+                    <div>
+                        <Label htmlFor="jenis_perusahaan">Jenis Perusahaan</Label>
+                        <Input
+                            id="jenis_perusahaan"
+                            value={customer.jenis_perusahaan || '-'}
                             disabled
                             className="w-full border border-gray-300 dark:border-neutral-600 dark:text-white"
                         />
@@ -584,8 +593,8 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                     </div>
                 </div>
 
-                {/* 🔹 NPWP */}
-                <div className="grid gap-4 md:grid-cols-2">
+                {/* 🔹 NPWP & NIB */}
+                <div className="grid gap-4 md:grid-cols-3">
                     <div>
                         <Label htmlFor="no_npwp">Nomor NPWP</Label>
                         <Input
@@ -600,6 +609,15 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                         <Input
                             id="no_npwp_16"
                             value={customer.no_npwp_16 || '-'}
+                            disabled
+                            className="w-full border border-gray-300 dark:border-neutral-600 dark:text-white"
+                        />
+                    </div>
+                    <div>
+                        <Label htmlFor="nib">Nomor NIB</Label>
+                        <Input
+                            id="nib"
+                            value={customer.nib || '-'}
                             disabled
                             className="w-full border border-gray-300 dark:border-neutral-600 dark:text-white"
                         />
@@ -711,7 +729,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
 
             {showUserSubmit && (
                 <>
-                    {userRole === 'user' && (
+                    {userRole === 'marketing' && (
                         <div className="mt-6 w-full md:w-1/3">
                             <ResettableDropzone
                                 label="Upload Lampiran Penawaran Marketing (PDF)"
@@ -761,7 +779,7 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
                 </div>
             )}
 
-            {userRole !== 'user' &&
+            {userRole !== 'marketing' &&
                 (showAnotherUserSubmit || showManagerApprove || showDirekturApprove || showSubmitForDirektur || showLawyerApprove) && (
                     <div className="mt-6">
                         <h2 className="text-xl font-bold">Masukkan Data Review</h2>

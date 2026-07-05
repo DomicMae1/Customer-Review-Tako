@@ -26,6 +26,8 @@ use Illuminate\Support\Facades\Validator;
 
 class CustomerController extends Controller
 {
+    private array $companyUsersCache = [];
+
     /**
      * Display a listing of the resource.
      */
@@ -33,12 +35,12 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasPermissionTo('view-master-customer')) {
-            throw UnauthorizedException::forPermissions(['view-master-customer']);
+        if (!$user->can('customer.view')) {
+            throw UnauthorizedException::forPermissions(['customer.view']);
         }
 
         // --- Cek user tanpa perusahaan ---
-        if ($user->hasRole(['user', 'manager', 'direktur']) && empty($user->id_perusahaan)) {
+        if ($user->hasRole(['marketing', 'manager', 'direktur']) && empty($user->id_perusahaan)) {
             return Inertia::render('m_customer/page', [
                 'customers' => [],
                 'company' => null,
@@ -55,7 +57,7 @@ class CustomerController extends Controller
         ]);
 
         // --- 2. Filter Scope Perusahaan ---
-        if ($user->hasRole('user')) {
+        if ($user->hasRole('marketing')) {
             if ($user->id_perusahaan) {
                 $query->where('id_perusahaan', $user->id_perusahaan)
                       ->where('id_user', $user->id);
@@ -77,6 +79,14 @@ class CustomerController extends Controller
                     $query->whereRaw('1 = 0');
                 }
             }
+        } elseif ($user->hasRole('admin')) {
+            // Admin dapat memilih perusahaan tertentu dari selector di header.
+            // Jika sudah memilih (admin_active_company_id ada di session), filter by perusahaan.
+            // Jika belum memilih (null), tampilkan semua data tanpa filter perusahaan.
+            $adminActiveCompanyId = session('admin_active_company_id');
+            if ($adminActiveCompanyId) {
+                $query->where('id_perusahaan', $adminActiveCompanyId);
+            }
         }
 
         // =====================================================================
@@ -87,7 +97,7 @@ class CustomerController extends Controller
 
         // --- A. ROLE USER (MARKETING) ---
         // Lihat semua history buatan sendiri.
-        if ($user->hasRole('user')) {
+        if ($user->hasRole('marketing')) {
             // Logic sudah tercover di filter scope perusahaan (where id_user)
         }
 
@@ -260,16 +270,28 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasRole('admin')) {
-            abort(403, 'Unauthorized access. Only admin can import customer CSV.');
+        if (!$user->can('customer.import')) {
+            abort(403, 'Unauthorized access. You do not have permission to import customer CSV.');
         }
+
+        $isMarketing = $user->hasRole('marketing');
 
         $request->validate([
             'csv_file' => ['required', 'file', 'mimes:csv,txt'],
-            'id_perusahaan' => ['required', 'integer'],
+            'id_perusahaan' => [$isMarketing ? 'nullable' : 'required', 'integer'],
         ]);
 
-        $perusahaan = Perusahaan::find($request->integer('id_perusahaan'));
+        $idPerusahaan = $isMarketing 
+            ? ($user->id_perusahaan ?: session('company_id')) 
+            : $request->integer('id_perusahaan');
+
+        if (!$idPerusahaan) {
+            return back()->withErrors([
+                'id_perusahaan' => 'Perusahaan tujuan tidak ditemukan atau belum disetting.',
+            ]);
+        }
+
+        $perusahaan = Perusahaan::find($idPerusahaan);
 
         if (!$perusahaan) {
             return back()->withErrors([
@@ -333,10 +355,61 @@ class CustomerController extends Controller
         $errors = [];
         $rowNumber = 1;
 
+        // Kumpulkan customer baru yang berhasil disimpan untuk dikirim ke external API
+        // setelah commit (agar kegagalan API tidak merusak data import lokal)
+        $newCustomersForApiSync = [];
+
         DB::connection('tako-customer')->beginTransaction();
         DB::connection('tako-perusahaan')->beginTransaction();
 
         try {
+            $companyUsers = User::with('roles')
+                ->leftJoin('perusahaan_user_roles', function ($join) use ($perusahaan) {
+                    $join->on('users.id', '=', 'perusahaan_user_roles.user_id')
+                        ->where('perusahaan_user_roles.id_perusahaan', '=', $perusahaan->id);
+                })
+                ->where(function ($q) use ($perusahaan) {
+                    $q->where('perusahaan_user_roles.id_perusahaan', $perusahaan->id)
+                        ->orWhere('users.id_perusahaan', $perusahaan->id);
+                })
+                ->select('users.id', 'users.name', 'perusahaan_user_roles.role as pivot_role')
+                ->get();
+
+            $groupedUsers = [];
+            $companyMarketingUsers = [];
+            foreach ($companyUsers as $u) {
+                $normName = $this->normalizeName($u->name);
+                if (!isset($groupedUsers[$normName])) {
+                    $groupedUsers[$normName] = [];
+                }
+
+                $roles = [];
+                if ($u->pivot_role) {
+                    $roles[] = strtolower(trim($u->pivot_role));
+                }
+                foreach ($u->roles as $roleObj) {
+                    $roles[] = strtolower(trim($roleObj->name));
+                }
+                $roles = array_unique($roles);
+
+                if (!isset($groupedUsers[$normName][$u->id])) {
+                    $groupedUsers[$normName][$u->id] = [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'roles' => $roles,
+                    ];
+                } else {
+                    $groupedUsers[$normName][$u->id]['roles'] = array_unique(array_merge(
+                        $groupedUsers[$normName][$u->id]['roles'],
+                        $roles
+                    ));
+                }
+
+                if (in_array('marketing', $roles)) {
+                    $companyMarketingUsers[$u->id] = $u;
+                }
+            }
+
             while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
                 $rowNumber++;
 
@@ -363,11 +436,66 @@ class CustomerController extends Controller
                 }
 
                 $customerPayload = $this->mapImportedCustomerRow($rowData);
+                $kotaRaw = $this->getCsvValue($rowData, ['kotatextcustomer', 'nmmkota', 'kota', 'kotafaktur']);
 
                 if ($customerPayload['nama_perusahaan'] === '') {
                     $skipped++;
-                    $errors[] = "Baris {$rowNumber}: nama customer/perusahaan kosong.";
+                    $skipReason = "nama customer/perusahaan kosong";
+                    $errors[] = "Baris {$rowNumber}: {$skipReason}.";
+                    Log::warning("[ImportCSV] Baris {$rowNumber} SKIPPED - NmMKota: '{$kotaRaw}', Hasil Deteksi: '{$customerPayload['jenis_perusahaan']}', Alasan Skip: {$skipReason}");
                     continue;
+                }
+
+                // Check if we had a clear company type, country, or city column in CSV
+                $hasJenisColumn = false;
+                foreach (['jenis_perusahaan', 'jenisperusahaan', 'jenis'] as $key) {
+                    if (array_key_exists($this->normalizeCsvHeader($key), $rowData) && trim((string)$rowData[$this->normalizeCsvHeader($key)]) !== '') {
+                        $hasJenisColumn = true;
+                        break;
+                    }
+                }
+                $hasCountryColumn = false;
+                foreach (['negara', 'country', 'negara_asal', 'country_origin'] as $key) {
+                    if (array_key_exists($this->normalizeCsvHeader($key), $rowData) && trim((string)$rowData[$this->normalizeCsvHeader($key)]) !== '') {
+                        $hasCountryColumn = true;
+                        break;
+                    }
+                }
+                $hasCityColumn = false;
+                foreach (['kotatextcustomer', 'nmmkota', 'kota', 'kotafaktur'] as $key) {
+                    if (array_key_exists($this->normalizeCsvHeader($key), $rowData) && trim((string)$rowData[$this->normalizeCsvHeader($key)]) !== '') {
+                        $hasCityColumn = true;
+                        break;
+                    }
+                }
+
+                if (!$hasJenisColumn && !$hasCountryColumn && !$hasCityColumn) {
+                    Log::warning("[ImportCSV] Baris {$rowNumber}: Kolom jenis_perusahaan, negara, atau kota tidak ditemukan/kosong. Menggunakan default 'Perusahaan Dalam Negeri'.");
+                }
+
+                // Log process info
+                Log::info("[ImportCSV] Memproses Baris {$rowNumber} - NmMKota: '{$kotaRaw}', Hasil Deteksi: '{$customerPayload['jenis_perusahaan']}'");
+
+                // Domestic company validation: nib, no_npwp, no_npwp_16 are mandatory
+                if ($customerPayload['jenis_perusahaan'] === 'Perusahaan Dalam Negeri') {
+                    $missingFields = [];
+                    if (empty($customerPayload['nib'])) {
+                        $missingFields[] = 'nib';
+                    }
+                    if (empty($customerPayload['no_npwp'])) {
+                        $missingFields[] = 'no_npwp';
+                    }
+                    if (empty($customerPayload['no_npwp_16'])) {
+                        $missingFields[] = 'no_npwp_16';
+                    }
+
+                    if (count($missingFields) > 0) {
+                        $skipped++;
+                        $skipReason = "data wajib " . implode(', ', $missingFields) . " kosong untuk Perusahaan Dalam Negeri";
+                        $errors[] = "Baris {$rowNumber}: {$skipReason}.";
+                        Log::warning("[ImportCSV] Baris {$rowNumber} SKIPPED - NmMKota: '{$kotaRaw}', Hasil Deteksi: '{$customerPayload['jenis_perusahaan']}', Alasan Skip: {$skipReason}");
+                        continue;
+                    }
                 }
 
                 $existingCustomer = $this->findExistingCustomerForImport(
@@ -377,26 +505,35 @@ class CustomerController extends Controller
                     $customerPayload['no_npwp_16']
                 );
 
+                $existingUserId = $existingCustomer ? $existingCustomer->id_user : null;
+
+                $nmMSales = $this->getCsvValue($rowData, ['nmmsales', 'sales', 'marketing']);
+                $rowUserId = $this->resolveUserForImportRow($perusahaan->id, $nmMSales, $groupedUsers, $companyMarketingUsers, $rowNumber, $user, $existingUserId);
+
                 if ($existingCustomer) {
                     $existingCustomer->fill($this->mergeImportedCustomerData($existingCustomer, $customerPayload));
+                    $existingCustomer->id_user = $rowUserId;
 
                     if ($existingCustomer->trashed()) {
                         $existingCustomer->restore();
                     }
 
                     $existingCustomer->save();
-                    $this->ensureCustomerStatusExists($existingCustomer->id, $existingCustomer->id_user ?: $user->id);
+                    $this->ensureCustomerStatusExists($existingCustomer->id, $rowUserId);
                     $updated++;
                     continue;
                 }
 
                 $customer = Customer::create(array_merge($customerPayload, [
-                    'id_user' => $user->id,
+                    'id_user' => $rowUserId,
                     'id_perusahaan' => $perusahaan->id,
                 ]));
 
-                $this->ensureCustomerStatusExists($customer->id, $user->id);
+                $this->ensureCustomerStatusExists($customer->id, $rowUserId);
                 $imported++;
+
+                // Simpan referensi untuk sync API setelah commit
+                $newCustomersForApiSync[] = $customer;
             }
 
             DB::connection('tako-perusahaan')->commit();
@@ -412,6 +549,25 @@ class CustomerController extends Controller
         }
 
         fclose($handle);
+
+        // Kirim setiap customer baru ke external API (di luar transaction).
+        // Kegagalan API tidak merusak data import yang sudah tersimpan.
+        foreach ($newCustomersForApiSync as $syncedCustomer) {
+            try {
+                $this->sendCustomerToExternalApi($syncedCustomer, $user);
+
+                Log::info('[ImportCSV] Berhasil sync customer ke external API.', [
+                    'customer_id'   => $syncedCustomer->id,
+                    'nama_perusahaan' => $syncedCustomer->nama_perusahaan,
+                ]);
+            } catch (\Throwable $apiEx) {
+                Log::error('[ImportCSV] Gagal sync customer ke external API.', [
+                    'customer_id'   => $syncedCustomer->id,
+                    'nama_perusahaan' => $syncedCustomer->nama_perusahaan,
+                    'error'         => $apiEx->getMessage(),
+                ]);
+            }
+        }
 
         $successMessage = "Import customer selesai. {$imported} data baru, {$updated} data diperbarui.";
         $errorMessage = null;
@@ -433,13 +589,23 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasPermissionTo('create-master-customer')) {
-            throw UnauthorizedException::forPermissions(['create-master-customer']);
+        if (!$user->can('customer.create')) {
+            throw UnauthorizedException::forPermissions(['customer.create']);
         }
 
         $companies = collect();
 
-        if ($user->hasRole(['manager', 'direktur'])) {
+        if ($user->hasRole('admin')) {
+            $companies = Perusahaan::select(
+                'id',
+                'nama_perusahaan',
+                'is_npwp',
+                'is_nib',
+                'is_sptkp',
+                'is_ktp'
+            )
+            ->get();
+        } elseif ($user->hasRole(['manager', 'direktur'])) {
             $companies = $user->companies()
                 ->select(
                     'perusahaan.id',
@@ -496,8 +662,8 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasPermissionTo('create-master-customer')) {
-            throw UnauthorizedException::forPermissions(['create-master-customer']);
+        if (!$user->can('customer.create')) {
+            throw UnauthorizedException::forPermissions(['customer.create']);
         }
 
         return Inertia::render('m_customer/table/generate-data-form', [
@@ -515,15 +681,15 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->hasPermissionTo('create-master-customer')) {
-            throw UnauthorizedException::forPermissions(['create-master-customer']);
+        if (!$user->can('customer.create')) {
+            throw UnauthorizedException::forPermissions(['customer.create']);
         }
 
         $roles = $user->getRoleNames();
 
-        if ($roles->contains('user')) {
+        if ($roles->contains('marketing')) {
             $idPerusahaan = $user->id_perusahaan;
-        } elseif ($roles->contains('manager') || $roles->contains('direktur')) {
+        } elseif ($roles->contains('manager') || $roles->contains('direktur') || $roles->contains('admin')) {
             $idPerusahaan = $request->id_perusahaan;
         } else {
             $idPerusahaan = $user->id_perusahaan;
@@ -547,24 +713,25 @@ class CustomerController extends Controller
             'kategori_usaha' => 'required|string',
             'nama_perusahaan' => 'required|string',
             'bentuk_badan_usaha' => 'required|string',
+            'jenis_perusahaan' => 'required|string|in:Perusahaan Dalam Negeri,Perusahaan Luar Negeri',
             'alamat_lengkap' => 'required|string',
             'kota' => 'required|string',
-            'no_telp' => 'nullable|string',
+            'no_telp' => 'nullable',
             'no_fax' => 'nullable|string',
             'alamat_penagihan' => 'required|string',
             'email' => 'required|email',
             'website' => 'nullable|string',
             'top' => 'nullable|string',
             'status_perpajakan' => 'nullable|string',
-            'no_npwp' => 'nullable|string',
-            'no_npwp_16' => 'nullable|string',
-            'nib' => 'nullable|string',
+            'no_npwp' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
+            'no_npwp_16' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
+            'nib' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
             'nama_pj' => 'nullable|string',
             'no_ktp_pj' => 'nullable|string',
             'no_telp_pj' => 'nullable|string',
             'nama_personal' => 'nullable|string',
             'jabatan_personal' => 'nullable|string',
-            'no_telp_personal' => 'nullable|string',
+            'no_telp_personal' => 'nullable',
             'email_personal' => 'nullable|email',
             'keterangan_reject' => 'nullable|string',
             'user_id' => 'required|exists:users,id',
@@ -588,14 +755,15 @@ class CustomerController extends Controller
             ->toArray();
 
         $isCustomerPerorangan = $request->bentuk_badan_usaha === 'Customer Perorangan';
+        $isLuarNegeri = $request->jenis_perusahaan === 'Perusahaan Luar Negeri';
 
-        if ($perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
+        if (!$isLuarNegeri && $perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
             return redirect()
                 ->back()
                 ->withErrors(['attachments' => 'Dokumen NPWP wajib diunggah.']);
         }
 
-        if ($perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
+        if (!$isLuarNegeri && $perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
             return redirect()
                 ->back()
                 ->withErrors(['attachments' => 'Dokumen NIB wajib diunggah.']);
@@ -689,24 +857,25 @@ class CustomerController extends Controller
                 'kategori_usaha' => 'required|string',
                 'nama_perusahaan' => 'required|string',
                 'bentuk_badan_usaha' => 'required|string',
+                'jenis_perusahaan' => 'required|string|in:Perusahaan Dalam Negeri,Perusahaan Luar Negeri',
                 'alamat_lengkap' => 'required|string',
                 'kota' => 'required|string',
-                'no_telp' => 'nullable|string',
+                'no_telp' => 'nullable',
                 'no_fax' => 'nullable|string',
                 'alamat_penagihan' => 'required|string',
                 'email' => 'required|email',
                 'website' => 'nullable|string',
                 'top' => 'nullable|string',
                 'status_perpajakan' => 'nullable|string',
-                'no_npwp' => 'nullable|string',
-                'no_npwp_16' => 'nullable|string',
-                'nib' => 'nullable|string',
+                'no_npwp' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
+                'no_npwp_16' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
+                'nib' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
                 'nama_pj' => 'nullable|string',
                 'no_ktp_pj' => 'nullable|string',
                 'no_telp_pj' => 'nullable|string',
                 'nama_personal' => 'nullable|string',
                 'jabatan_personal' => 'nullable|string',
-                'no_telp_personal' => 'nullable|string',
+                'no_telp_personal' => 'nullable',
                 'email_personal' => 'nullable|email',
                 'keterangan_reject' => 'nullable|string',
                 'user_id' => 'required|exists:users,id',
@@ -730,14 +899,15 @@ class CustomerController extends Controller
                 ->toArray();
 
             $isCustomerPerorangan = $request->bentuk_badan_usaha === 'Customer Perorangan';
+            $isLuarNegeri = $request->jenis_perusahaan === 'Perusahaan Luar Negeri';
 
-            if ($perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
+            if (!$isLuarNegeri && $perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
                 return response()->json([
                     'error' => 'Dokumen NPWP wajib diunggah.',
                 ], 422);
             }
 
-            if ($perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
+            if (!$isLuarNegeri && $perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
                 return response()->json([
                     'error' => 'Dokumen NIB wajib diunggah.',
                 ], 422);
@@ -795,7 +965,7 @@ class CustomerController extends Controller
             $linkUser = User::find($userId);
 
             if ($linkUser) {
-                $isMarketing = $linkUser->hasRole('user');
+                $isMarketing = $linkUser->hasRole('marketing');
 
                 $this->sendCustomerToExternalApi(
                     $customer,
@@ -896,7 +1066,10 @@ class CustomerController extends Controller
         $originalName = $request->nama_file;
         $mode = $request->mode ?? 'medium';
         $idPerusahaan = $request->id_perusahaan;
-        $role = strtolower($request->role ?? 'user');
+        $role = strtolower($request->role ?? 'marketing');
+        if ($role === 'user') {
+            $role = 'marketing';
+        }
         $customerId = $request->customer_id;
         $incrementOrder = (int)($request->increment_order ?? 1);
 
@@ -990,7 +1163,7 @@ class CustomerController extends Controller
 
         $newFileName = "{$npwp}-{$orderString}-{$docType}.{$finalExt}";
 
-        $subFolder = ($role === 'user') ? 'attachment' : 'customers';
+        $subFolder = ($role === 'marketing' || $role === 'user') ? 'attachment' : 'customers';
         if (in_array($docType, ['npwp', 'nib', 'sppkp', 'ktp'])) {
             $subFolder = 'attachment';
         }
@@ -1222,10 +1395,10 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        $hasGlobalAccess = $user->hasRole('auditor') || ($user->hasRole('lawyer') && empty($user->id_perusahaan));
+        $hasGlobalAccess = $user->can('customer.approve.auditor') || ($user->can('customer.approve.lawyer') && empty($user->id_perusahaan));
 
-        if (!$hasGlobalAccess && !$user->hasPermissionTo('view-master-customer')) {
-            throw UnauthorizedException::forPermissions(['view-master-customer']);
+        if (!$hasGlobalAccess && !$user->can('customer.view')) {
+            throw UnauthorizedException::forPermissions(['customer.view']);
         }
 
         if ($hasGlobalAccess) {
@@ -1237,13 +1410,15 @@ class CustomerController extends Controller
             ]);
         }
 
-        $userCompanyIds = $user->companies()->pluck('perusahaan.id')->toArray();
+        if (!$user->hasRole('admin')) {
+            $userCompanyIds = $user->companies()->pluck('perusahaan.id')->toArray();
 
-        if (!empty($user->id_perusahaan)) {
-            $userCompanyIds[] = $user->id_perusahaan;
-        }
-        if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
-            abort(403, 'Anda tidak memiliki akses ke data customer ini.');
+            if (!empty($user->id_perusahaan)) {
+                $userCompanyIds[] = $user->id_perusahaan;
+            }
+            if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
+                abort(403, 'Anda tidak memiliki akses ke data customer ini.');
+            }
         }
 
         $customer->load('attachments');
@@ -1261,16 +1436,42 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        $customer->load('attachments');
-
-        $userCompanyIds = $user->companies()->pluck('perusahaan.id')->toArray();
-
-        if (!empty($user->id_perusahaan)) {
-            $userCompanyIds[] = $user->id_perusahaan;
+        if (!$user->can('customer.update')) {
+            abort(403, 'Unauthorized action.');
         }
 
-        if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
-            abort(403, 'Anda tidak memiliki akses ke data customer ini.');
+        $customer->load('attachments');
+
+        if ($user->hasRole('admin')) {
+            $companies = Perusahaan::select(
+                'id',
+                'nama_perusahaan',
+                'is_npwp',
+                'is_nib',
+                'is_sptkp',
+                'is_ktp'
+            )->get();
+        } else {
+            $userCompanyIds = $user->companies()->pluck('perusahaan.id')->toArray();
+
+            if (!empty($user->id_perusahaan)) {
+                $userCompanyIds[] = $user->id_perusahaan;
+            }
+
+            if (!in_array($customer->id_perusahaan, $userCompanyIds)) {
+                abort(403, 'Anda tidak memiliki akses ke data customer ini.');
+            }
+
+            $companies = $user->companies()
+                ->select(
+                    'perusahaan.id',
+                    'perusahaan.nama_perusahaan',
+                    'perusahaan.is_npwp',
+                    'perusahaan.is_nib',
+                    'perusahaan.is_sptkp',
+                    'perusahaan.is_ktp'
+                )
+                ->get();
         }
 
         $company = Perusahaan::find($customer->id_perusahaan);
@@ -1285,25 +1486,14 @@ class CustomerController extends Controller
                 'is_ktp' => (bool) ($company?->is_ktp ?? true),
             ],
 
-            'companies' => $user->companies()
-                ->select(
-                    'perusahaan.id',
-                    'perusahaan.nama_perusahaan',
-                    'perusahaan.is_npwp',
-                    'perusahaan.is_nib',
-                    'perusahaan.is_sptkp',
-                    'perusahaan.is_ktp'
-                )
-                ->get()
-                ->map(fn ($company) => [
-                    'id' => $company->id,
-                    'nama_perusahaan' => $company->nama_perusahaan,
-                    'is_npwp' => (bool) $company->is_npwp,
-                    'is_nib' => (bool) $company->is_nib,
-                    'is_sptkp' => (bool) $company->is_sptkp,
-                    'is_ktp' => (bool) $company->is_ktp,
-                ])
-                ->values(),
+            'companies' => $companies->map(fn ($company) => [
+                'id' => $company->id,
+                'nama_perusahaan' => $company->nama_perusahaan,
+                'is_npwp' => (bool) $company->is_npwp,
+                'is_nib' => (bool) $company->is_nib,
+                'is_sptkp' => (bool) $company->is_sptkp,
+                'is_ktp' => (bool) $company->is_ktp,
+            ])->values(),
         ]);
     }
 
@@ -1315,6 +1505,10 @@ class CustomerController extends Controller
     {
         $user = auth('web')->user();
 
+        if (!$user->can('customer.update')) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $createdDate = \Carbon\Carbon::parse($customer->created_at)->toDateString();
         $today = now()->toDateString();
 
@@ -1322,30 +1516,31 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'id_perusahaan' => [
-            'required',
+                'required',
                 Rule::exists((new Perusahaan)->getTable(), 'id'),
             ],
             'kategori_usaha' => 'required|string',
             'nama_perusahaan' => 'required|string',
             'bentuk_badan_usaha' => 'required|string',
+            'jenis_perusahaan' => 'required|string|in:Perusahaan Dalam Negeri,Perusahaan Luar Negeri',
             'alamat_lengkap' => 'required|string',
             'kota' => 'required|string',
-            'no_telp' => 'nullable|string',
+            'no_telp' => 'nullable',
             'no_fax' => 'nullable|string',
             'alamat_penagihan' => 'required|string',
             'email' => 'required|email',
             'website' => 'nullable|string',
             'top' => 'nullable|string',
             'status_perpajakan' => 'nullable|string',
-            'no_npwp' => 'nullable|string',
-            'no_npwp_16' => 'nullable|string',
-            'nib' => 'nullable|string',
+            'no_npwp' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
+            'no_npwp_16' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
+            'nib' => 'required_if:jenis_perusahaan,Perusahaan Dalam Negeri|nullable|string',
             'nama_pj' => 'nullable|string',
             'no_ktp_pj' => 'nullable|string',
             'no_telp_pj' => 'nullable|string',
             'nama_personal' => 'nullable|string',
             'jabatan_personal' => 'nullable|string',
-            'no_telp_personal' => 'nullable|string',
+            'no_telp_personal' => 'nullable',
             'email_personal' => 'nullable|email',
             'keterangan_reject' => 'nullable|string',
             'user_id' => 'required|exists:users,id',
@@ -1387,6 +1582,17 @@ class CustomerController extends Controller
             }
 
             DB::commit();
+
+            try {
+                $this->sendCustomerToExternalApi($customer, $user);
+            } catch (\Throwable $apiEx) {
+                Log::error('[Update] Gagal sync customer ke external API.', [
+                    'customer_id'   => $customer->id,
+                    'nama_perusahaan' => $customer->nama_perusahaan,
+                    'error'         => $apiEx->getMessage(),
+                ]);
+            }
+
             return redirect()->route('customer.index')->with('success', 'Data Customer berhasil diperbarui!');
         } catch (\Throwable $th) {
             DB::rollBack();
@@ -1399,6 +1605,11 @@ class CustomerController extends Controller
      */
     public function destroy(Customer $customer)
     {
+        $user = auth('web')->user();
+
+        if (!$user->can('customer.delete')) {
+            abort(403, 'Unauthorized action.');
+        }
 
         try {
             DB::beginTransaction();
@@ -1422,6 +1633,10 @@ class CustomerController extends Controller
 
         $customer = Customer::with(['attachments', 'perusahaan'])->findOrFail($id);
         $user = auth('web')->user();
+
+        if (!$user->can('customer.pdf')) {
+            abort(403, 'Unauthorized action.');
+        }
 
         $tempDir = storage_path("app/temp");
         if (!file_exists($tempDir)) {
@@ -1778,6 +1993,7 @@ class CustomerController extends Controller
             'nama' => $customer->nama_personal,
             'no_npwp' => preg_replace('/\D/', '', $customer->no_npwp ?? ''),
             'no_npwp_16' => preg_replace('/\D/', '', $customer->no_npwp_16 ?? ''),
+            'no_nib' => $customer->nib ?? null,
         ];
 
         try {
@@ -1819,11 +2035,12 @@ class CustomerController extends Controller
             ? ($customer->kategori_usaha ?? '')
             : ($customer->kategori_usaha ?? '-');
         $payload['no_telp'] = $forEdit
-            ? $customer->primary_no_telp
+            ? $customer->no_telp_list
             : ($customer->formatted_no_telp ?: '-');
         $payload['no_telp_personal'] = $forEdit
-            ? $customer->primary_no_telp_personal
+            ? $customer->no_telp_personal_list
             : ($customer->formatted_no_telp_personal ?: '-');
+        $payload['creator_role'] = $customer->creator?->roles?->first()?->name ?? 'marketing';
 
         return $payload;
     }
@@ -1863,6 +2080,23 @@ class CustomerController extends Controller
         $emailPersonal = $this->sanitizeEmail($this->getCsvValue($row, ['email', 'emailpersonal', 'emailperusahaan']));
         $npwp = $this->sanitizeImportedNpwp($this->getCsvValue($row, ['npwp', 'nonpwp']));
         $npwp16 = $this->sanitizeImportedNpwp($this->getCsvValue($row, ['npwp16', 'nonpwp16', 'npwpbaru', 'nonpwpbaru']));
+        
+        $formattedNpwp15 = '';
+        $formattedNpwp16 = '';
+
+        if (strlen($npwp) === 15) {
+            $formattedNpwp15 = $this->formatNpwpString($npwp);
+        } else {
+            $formattedNpwp15 = $npwp;
+        }
+
+        $digits16 = $npwp16 !== '' ? $npwp16 : $npwp;
+        if (strlen($digits16) === 16) {
+            $formattedNpwp16 = $this->formatNpwpString($digits16);
+        } else {
+            $formattedNpwp16 = '';
+        }
+
         $nib = $this->sanitizeImportedNib($this->getCsvValue($row, ['nib', 'nonib']));
         $term = $this->getCsvValue($row, ['term', 'top']);
         $keterangan = $this->getCsvValue($row, ['keterangan', 'remarks', 'note']);
@@ -1870,10 +2104,30 @@ class CustomerController extends Controller
         $hp1 = $this->getCsvValue($row, ['hp1', 'notelppersonal', 'notelppj']);
         $hp2 = $this->getCsvValue($row, ['hp2']);
 
+        $jenisRaw = $this->getCsvValue($row, ['jenis_perusahaan', 'jenisperusahaan', 'jenis']);
+        $countryRaw = $this->getCsvValue($row, ['negara', 'country', 'negara_asal', 'country_origin']);
+
+        $jenisPerusahaan = 'Perusahaan Dalam Negeri';
+        if ($jenisRaw !== '') {
+            if (str_contains(strtolower($jenisRaw), 'luar negeri') || str_contains(strtolower($jenisRaw), 'luar_negeri') || str_contains(strtolower($jenisRaw), 'foreign')) {
+                $jenisPerusahaan = 'Perusahaan Luar Negeri';
+            }
+        } elseif ($countryRaw !== '') {
+            $cleanCountry = strtolower(trim($countryRaw));
+            if ($cleanCountry !== '' && $cleanCountry !== 'indonesia' && $cleanCountry !== 'indo' && $cleanCountry !== 'id' && $cleanCountry !== 'ina') {
+                $jenisPerusahaan = 'Perusahaan Luar Negeri';
+            }
+        } elseif ($kota !== '') {
+            if ($this->detectIsForeignCity($kota)) {
+                $jenisPerusahaan = 'Perusahaan Luar Negeri';
+            }
+        }
+
         return $this->normalizeImportedCustomerTextFields([
             'kategori_usaha' => null,
             'nama_perusahaan' => $namaPerusahaan,
             'bentuk_badan_usaha' => $this->nullIfEmpty($this->inferBentukBadanUsaha($namaPerusahaan)),
+            'jenis_perusahaan' => $jenisPerusahaan,
             'alamat_lengkap' => $this->nullIfEmpty($alamatLengkap),
             'kota' => $this->nullIfEmpty($kota),
             'no_telp' => $this->normalizeNullableArray([
@@ -1885,9 +2139,9 @@ class CustomerController extends Controller
             'email' => null,
             'website' => $this->nullIfEmpty($this->getCsvValue($row, ['website', 'web'])),
             'top' => $this->nullIfEmpty($this->extractTermsOfPayment($term, $keterangan)),
-            'status_perpajakan' => ($npwp !== '' || $npwp16 !== '') ? 'pkp' : null,
-            'no_npwp' => $this->nullIfEmpty($npwp),
-            'no_npwp_16' => $this->nullIfEmpty($this->formatNpwp16($npwp16 !== '' ? $npwp16 : $npwp)),
+            'status_perpajakan' => ($formattedNpwp15 !== '' || $formattedNpwp16 !== '') ? 'pkp' : null,
+            'no_npwp' => $this->nullIfEmpty($formattedNpwp15),
+            'no_npwp_16' => $this->nullIfEmpty($formattedNpwp16),
             'nib' => $this->nullIfEmpty($nib),
             'nama_pj' => null,
             'no_ktp_pj' => null,
@@ -2095,6 +2349,124 @@ class CustomerController extends Controller
         ]);
     }
 
+
+    private function detectIsForeignCity(string $cityName): bool
+    {
+        $normalized = trim($cityName);
+        $normalized = preg_replace('/\s+/u', ' ', $normalized);
+        $normalized = strtolower($normalized);
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        $indonesianKeywords = [
+            'indonesia', 'jakarta', 'surabaya', 'bandung', 'medan', 'semarang', 'makassar', 
+            'palembang', 'tangerang', 'bekasi', 'depok', 'bogor', 'yogyakarta', 'jogja', 'solo', 
+            'malang', 'denpasar', 'bali', 'sidoarjo', 'gresik', 'balikpapan', 'samarinda', 
+            'pontianak', 'manado', 'banjarmasin', 'pekanbaru', 'batam', 'padang', 'lampung', 
+            'cirebon', 'surakarta', 'serang', 'jawa', 'sumatera', 'sumatra', 'kalimantan', 
+            'sulawesi', 'papua', 'maluku', 'ntt', 'ntb', 'banten', 'riau', 'aceh'
+        ];
+
+        foreach ($indonesianKeywords as $indo) {
+            if (str_contains($normalized, $indo)) {
+                return false;
+            }
+        }
+
+        $foreignKeywords = [
+            'singapore', 'singapura', 'malaysia', 'kuala lumpur', 'penang', 'johor', 'thailand', 
+            'bangkok', 'vietnam', 'hanoi', 'ho chi minh', 'philippines', 'manila', 'brunei', 
+            'myanmar', 'burma', 'cambodia', 'laos', 'timor', 'china', 'beijing', 'shanghai', 
+            'shenzhen', 'guangzhou', 'hong kong', 'hongkong', 'macau', 'taiwan', 'taipei', 
+            'japan', 'tokyo', 'osaka', 'kyoto', 'yokohama', 'korea', 'seoul', 'busan', 
+            'india', 'delhi', 'mumbai', 'australia', 'sydney', 'melbourne', 'perth', 
+            'new zealand', 'auckland', 'usa', 'america', 'united states', 'washington', 
+            'new york', 'california', 'texas', 'canada', 'toronto', 'vancouver', 'uk', 
+            'united kingdom', 'london', 'germany', 'berlin', 'munich', 'frankfurt', 
+            'france', 'paris', 'italy', 'rome', 'milan', 'netherlands', 'amsterdam', 
+            'switzerland', 'zurich', 'belgium', 'brussels', 'spain', 'madrid', 'barcelona', 
+            'russia', 'moscow', 'turkey', 'istanbul', 'uae', 'dubai', 'saudi', 'riyadh', 
+            'egypt', 'cairo', 'south africa', 'brazil', 'rio', 'sao paulo', 'foreign', 'luar negeri'
+        ];
+
+        foreach ($foreignKeywords as $foreign) {
+            if (str_contains($normalized, $foreign)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeName(string $name): string
+    {
+        $name = trim($name);
+        $name = preg_replace('/\s+/u', ' ', $name);
+        return strtolower($name);
+    }
+
+    private function resolveUserForImportRow(
+        int $idPerusahaan,
+        string $nmMSales,
+        array $groupedUsers,
+        array $companyMarketingUsers,
+        int $rowNumber,
+        User $currentUser,
+        ?int $existingUserId = null
+    ): ?int {
+        $normalizedSales = $this->normalizeName($nmMSales);
+
+        if (trim($nmMSales) !== '' && isset($groupedUsers[$normalizedSales])) {
+            $matches = $groupedUsers[$normalizedSales];
+            if (count($matches) === 1) {
+                return reset($matches)['id'];
+            }
+
+            // Duplicates: prioritize role 'marketing'
+            $marketingMatches = array_filter($matches, function ($u) {
+                return in_array('marketing', $u['roles']);
+            });
+
+            if (count($marketingMatches) === 1) {
+                return reset($marketingMatches)['id'];
+            } elseif (count($marketingMatches) > 1) {
+                // Multiple marketing matches: choose consistently (by ID) and log warning
+                $marketingMatches = array_values($marketingMatches);
+                usort($marketingMatches, fn($a, $b) => $a['id'] <=> $b['id']);
+                $chosenId = $marketingMatches[0]['id'];
+                Log::warning("[ImportCSV] Baris {$rowNumber}: Duplikat user marketing dengan nama '{$nmMSales}' ditemukan di perusahaan ID {$idPerusahaan}. Memilih ID {$chosenId} secara konsisten.");
+                return $chosenId;
+            } else {
+                // No marketing matches but duplicate non-marketing matches: choose consistently and log warning
+                $matches = array_values($matches);
+                usort($matches, fn($a, $b) => $a['id'] <=> $b['id']);
+                $chosenId = $matches[0]['id'];
+                Log::warning("[ImportCSV] Baris {$rowNumber}: Duplikat user (bukan marketing) dengan nama '{$nmMSales}' ditemukan di perusahaan ID {$idPerusahaan}. Memilih ID {$chosenId} secara konsisten.");
+                return $chosenId;
+            }
+        }
+
+        // Fallback: existing user ID first, then marketing pertama, then null
+        $fallbackUserId = null;
+        $fallbackType = 'null';
+
+        if ($existingUserId !== null) {
+            $fallbackUserId = $existingUserId;
+            $fallbackType = 'existing customer user';
+        } elseif (count($companyMarketingUsers) > 0) {
+            $marketingUsersList = array_values($companyMarketingUsers);
+            usort($marketingUsersList, fn($a, $b) => $a->id <=> $b->id);
+            $fallbackUserId = $marketingUsersList[0]->id;
+            $fallbackType = 'marketing pertama perusahaan';
+        }
+
+        Log::warning("[ImportCSV] Baris {$rowNumber}: Sales/Marketing dengan nama '{$nmMSales}' (Normalized: '{$normalizedSales}') tidak cocok dengan user di perusahaan ID {$idPerusahaan}. Menggunakan fallback ID: " . ($fallbackUserId ?? 'null') . " ({$fallbackType}).");
+
+        return $fallbackUserId;
+    }
+
     private function nullIfEmpty($value): mixed
     {
         if ($value === null) {
@@ -2110,11 +2482,46 @@ class CustomerController extends Controller
 
     private function normalizeNullableArray(array $values): ?array
     {
-        $normalized = array_values(array_filter(array_map(
-            fn ($value) => $this->nullIfEmpty(is_string($value) ? trim($value) : $value),
-            $values
-        )));
+        $normalized = [];
+        foreach ($values as $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if (is_string($value)) {
+                $parts = preg_split('/[,;\/]+/', $value);
+                foreach ($parts as $part) {
+                    $trimmed = trim($part);
+                    if ($trimmed !== '') {
+                        $normalized[] = $trimmed;
+                    }
+                }
+            } else {
+                $normalized[] = $value;
+            }
+        }
+
+        $normalized = array_values(array_unique($normalized));
 
         return empty($normalized) ? null : $normalized;
+    }
+
+    private function formatNpwpString(string $digits): string
+    {
+        $len = strlen($digits);
+        if ($len === 15) {
+            return substr($digits, 0, 2) . '.' .
+                   substr($digits, 2, 3) . '.' .
+                   substr($digits, 5, 3) . '-' .
+                   substr($digits, 8, 1) . '.' .
+                   substr($digits, 9, 3) . '.' .
+                   substr($digits, 12, 3);
+        }
+        if ($len === 16) {
+            return substr($digits, 0, 4) . ' ' .
+                   substr($digits, 4, 4) . ' ' .
+                   substr($digits, 8, 4) . ' ' .
+                   substr($digits, 12, 4);
+        }
+        return $digits;
     }
 }

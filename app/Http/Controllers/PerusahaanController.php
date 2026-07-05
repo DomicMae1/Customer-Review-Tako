@@ -22,8 +22,8 @@ class PerusahaanController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->hasRole('admin')) {
-            abort(403, 'Unauthorized access. Only admin can access this page.');
+        if (!$user->can('perusahaan.view')) {
+            abort(403, 'Unauthorized access.');
         }
 
         // 1. UBAH EAGER LOAD: Ganti 'tenant.domains' menjadi 'domain'
@@ -78,6 +78,10 @@ class PerusahaanController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$user->can('perusahaan.create')) {
+            abort(403, 'Unauthorized access.');
+        }
         $validated = $request->validate([
             'nama_perusahaan' => 'required|string|max:255',
             'domain'          => 'required|string|max:255',
@@ -87,6 +91,9 @@ class PerusahaanController extends Controller
             'id_User'         => 'nullable|integer|exists:users,id',
             'notify_1'        => 'nullable|string',
             'notify_2'        => 'nullable|string',
+            'is_npwp'         => 'nullable|boolean',
+            'is_nib'          => 'nullable|boolean',
+            'is_sptkp'        => 'nullable|boolean',
             'is_ppjk'         => 'nullable|boolean',
             'company_logo'    => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
@@ -99,6 +106,9 @@ class PerusahaanController extends Controller
             'id_domain'       => null, // Nanti kita update
             'notify_1'        => $validated['notify_1'] ?? null,
             'notify_2'        => $validated['notify_2'] ?? null,
+            'is_npwp'         => (bool) ($request->input('is_npwp', false)),
+            'is_nib'          => (bool) ($request->input('is_nib', false)),
+            'is_sptkp'        => (bool) ($request->input('is_sptkp', false)),
             'is_ppjk'         => (bool) ($validated['is_ppjk'] ?? false),
         ]);
 
@@ -151,7 +161,7 @@ class PerusahaanController extends Controller
             $validated['id_User_1'] ?? null => 'manager',
             $validated['id_User_2'] ?? null => 'direktur',
             $validated['id_User_3'] ?? null => 'lawyer',
-            $validated['id_User']   ?? null => 'user',
+            $validated['id_User']   ?? null => 'marketing',
         ];
 
         foreach ($roles as $userId => $role) {
@@ -193,6 +203,10 @@ class PerusahaanController extends Controller
 
     public function update(Request $request, Perusahaan $perusahaan)
     {
+        $user = Auth::user();
+        if (!$user->can('perusahaan.update')) {
+            abort(403, 'Unauthorized access.');
+        }
         $validated = $request->validate([
             'nama_perusahaan' => 'required|string|max:255',
 
@@ -207,6 +221,9 @@ class PerusahaanController extends Controller
             // notify
             'notify_1' => 'nullable|string',
             'notify_2' => 'nullable|string',
+            'is_npwp' => 'nullable|boolean',
+            'is_nib' => 'nullable|boolean',
+            'is_sptkp' => 'nullable|boolean',
             'is_ppjk' => 'nullable|boolean',
 
             // logo
@@ -274,12 +291,15 @@ class PerusahaanController extends Controller
         $perusahaan->nama_perusahaan = $validated['nama_perusahaan'];
         $perusahaan->notify_1 = $validated['notify_1'] ?? null;
         $perusahaan->notify_2 = $validated['notify_2'] ?? null;
+        $perusahaan->is_npwp = (bool) ($request->input('is_npwp', false));
+        $perusahaan->is_nib = (bool) ($request->input('is_nib', false));
+        $perusahaan->is_sptkp = (bool) ($request->input('is_sptkp', false));
         $perusahaan->is_ppjk = (bool) ($validated['is_ppjk'] ?? false);
         $perusahaan->save(); // Simpan semua perubahan
 
         // 6. Sync User Roles (Logic tetap sama)
         $sync = [];
-        if (!empty($validated['id_User']))   $sync[$validated['id_User']]   = ['role' => 'user'];
+        if (!empty($validated['id_User']))   $sync[$validated['id_User']]   = ['role' => 'marketing'];
         if (!empty($validated['id_User_1'])) $sync[$validated['id_User_1']] = ['role' => 'manager'];
         if (!empty($validated['id_User_2'])) $sync[$validated['id_User_2']] = ['role' => 'direktur'];
         if (!empty($validated['id_User_3'])) $sync[$validated['id_User_3']] = ['role' => 'lawyer'];
@@ -309,6 +329,10 @@ class PerusahaanController extends Controller
      */
     public function destroy(Perusahaan $perusahaan)
     {
+        $user = Auth::user();
+        if (!$user->can('perusahaan.delete')) {
+            abort(403, 'Unauthorized access.');
+        }
         $perusahaan->users()->detach();
 
         $perusahaan->delete();
@@ -320,6 +344,10 @@ class PerusahaanController extends Controller
 
     public function checkManagerExistence($idPerusahaan)
     {
+        $user = Auth::user();
+        if (!$user->can('perusahaan.view') && !$user->can('customer.create') && !$user->can('customer.update')) {
+            abort(403, 'Unauthorized access.');
+        }
         $perusahaan = Perusahaan::with(['users' => function ($query) {
             $query->wherePivot('role', 'manager');
         }])->find($idPerusahaan);

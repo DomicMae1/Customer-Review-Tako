@@ -1,6 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -37,13 +46,16 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const auth = props.auth || {};
     const companies = Array.isArray((props as any).companies) ? (props as any).companies : [];
     const userRole = auth.user?.roles?.[0]?.name ?? '';
-    const isAdmin = userRole === 'admin';
+    const userPermissions = auth.user?.permissions || [];
+    const isAdmin = auth.user?.roles?.some((role: any) => role.name === 'admin');
+    const hasPermission = (perm: string) => isAdmin || userPermissions.includes(perm);
 
     const userHasMainCompany = Boolean(auth.user?.id_perusahaan);
 
     const userHasCompanies = Array.isArray(auth.user?.companies) && auth.user.companies.length > 0;
 
-    const canAddCustomer = ['user', 'manager', 'direktur'].includes(userRole) && (userHasMainCompany || userHasCompanies);
+    const canImport = hasPermission('customer.import');
+    const canAddCustomer = hasPermission('customer.create') && (userHasMainCompany || userHasCompanies);
 
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'keterangan_status', desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -134,7 +146,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
         let id_perusahaan = selectedPerusahaanId;
 
-        if (userRole === 'user') {
+        if (userRole === 'marketing') {
             id_perusahaan = auth.user?.id_perusahaan?.toString() || '';
         }
 
@@ -182,7 +194,10 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const handleSubmitImportCsv = (event: React.FormEvent) => {
         event.preventDefault();
 
-        if (!selectedImportPerusahaanId) {
+        const isMarketing = userRole === 'marketing';
+        const targetCompanyId = isMarketing ? String(auth.user?.id_perusahaan || '') : selectedImportPerusahaanId;
+
+        if (!isMarketing && !selectedImportPerusahaanId) {
             toast.error('Pilih perusahaan tujuan terlebih dahulu.');
             return;
         }
@@ -193,7 +208,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         }
 
         const formData = new FormData();
-        formData.append('id_perusahaan', selectedImportPerusahaanId);
+        formData.append('id_perusahaan', targetCompanyId);
         formData.append('csv_file', csvFile);
 
         router.post(route('customer.import-csv'), formData, {
@@ -337,7 +352,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                         Reset
                     </Button>
 
-                    {userRole === 'direktur' && (
+                    {hasPermission('customer.approve.direktur') && (
                         <div>
                             <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as 'sudah' | 'belum' | 'all')}>
                                 <SelectTrigger className="w-[180px]">
@@ -355,7 +370,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
 
                 <div className="ml-auto flex shrink-0 items-center gap-2">
                     <DataTableViewOptions table={table} />
-                    {isAdmin && (
+                    {canImport && (
                         <Button variant="outline" className="h-9" onClick={handleImportCsv}>
                             Import from CSV
                         </Button>
@@ -718,21 +733,23 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     </DialogHeader>
 
                     <form onSubmit={handleSubmitImportCsv} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="import_customer_company">Perusahaan Tujuan</Label>
-                            <Select value={selectedImportPerusahaanId} onValueChange={setSelectedImportPerusahaanId}>
-                                <SelectTrigger id="import_customer_company" className="w-full">
-                                    <SelectValue placeholder="Pilih perusahaan" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {companies.map((company: any) => (
-                                        <SelectItem key={company.id} value={String(company.id)}>
-                                            {company.nama_perusahaan}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {userRole !== 'marketing' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="import_customer_company">Perusahaan Tujuan</Label>
+                                <Select value={selectedImportPerusahaanId} onValueChange={setSelectedImportPerusahaanId}>
+                                    <SelectTrigger id="import_customer_company" className="w-full">
+                                        <SelectValue placeholder="Pilih perusahaan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {companies.map((company: any) => (
+                                            <SelectItem key={company.id} value={String(company.id)}>
+                                                {company.nama_perusahaan}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="customer_csv_file">CSV File</Label>

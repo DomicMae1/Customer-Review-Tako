@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { Attachment, AttachmentType, MasterCustomer } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { File, Loader2, Moon, Sun } from 'lucide-react';
+import { File, Loader2, Moon, Sun, Plus, Trash2 } from 'lucide-react';
 import { FormEventHandler, useEffect, useState } from 'react';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
@@ -67,21 +67,22 @@ export default function PublicCustomerForm({
         bentuk_badan_usaha: customer?.bentuk_badan_usaha || '',
         alamat_lengkap: customer?.alamat_lengkap || '',
         kota: customer?.kota || '',
-        no_telp: customer?.no_telp ?? null,
+        no_telp: Array.isArray(customer?.no_telp) ? (customer.no_telp.length > 0 ? customer.no_telp : ['']) : (customer?.no_telp ? [customer.no_telp] : ['']),
         no_fax: customer?.no_fax ?? null,
         alamat_penagihan: customer?.alamat_penagihan || '',
         email: customer?.email || '',
         website: customer?.website || '',
         top: customer?.top || '',
-        status_perpajakan: customer?.status_perpajakan || '',
         no_npwp: customer?.no_npwp || '',
         no_npwp_16: customer?.no_npwp_16 || '',
+        nib: customer?.nib || '',
+        jenis_perusahaan: customer?.jenis_perusahaan || '',
         nama_pj: customer?.nama_pj || '',
         no_ktp_pj: customer?.no_ktp_pj || '',
         no_telp_pj: customer?.no_telp_pj || '',
         nama_personal: customer?.nama_personal || '',
         jabatan_personal: customer?.jabatan_personal || '',
-        no_telp_personal: customer?.no_telp_personal || '',
+        no_telp_personal: Array.isArray(customer?.no_telp_personal) ? (customer.no_telp_personal.length > 0 ? customer.no_telp_personal : ['']) : (customer?.no_telp_personal ? [customer.no_telp_personal] : ['']),
         email_personal: customer?.email_personal || '',
         keterangan_reject: customer?.keterangan_reject || '',
         user_id: user_id,
@@ -136,6 +137,8 @@ export default function PublicCustomerForm({
         top?: string;
         no_npwp?: string;
         no_npwp_16?: string;
+        nib?: string;
+        jenis_perusahaan?: string;
         nama_pj?: string;
         no_ktp_pj?: string;
         no_telp_pj?: string;
@@ -309,7 +312,7 @@ export default function PublicCustomerForm({
             return;
         }
 
-        if (!data.no_telp || data.no_telp.trim().length <= 3) {
+        if (!data.no_telp || !data.no_telp[0] || data.no_telp[0].trim().length <= 3) {
             showValidationError('no_telp', 'No Telpon Perusahaan wajib diisi');
             return;
         }
@@ -334,28 +337,55 @@ export default function PublicCustomerForm({
             return;
         }
 
-        if (!data.no_npwp || !data.no_npwp.trim()) {
-            showValidationError('no_npwp', 'Nomer NPWP wajib diisi');
+        if (!data.jenis_perusahaan) {
+            showValidationError('jenis_perusahaan', 'Jenis Perusahaan wajib dipilih');
             return;
         }
 
-        const npwpOnlyNumber = data.no_npwp.replace(/\D/g, '');
+        if (data.jenis_perusahaan === 'Perusahaan Dalam Negeri') {
+            if (!data.no_npwp || !data.no_npwp.trim()) {
+                showValidationError('no_npwp', 'Nomer NPWP wajib diisi');
+                return;
+            }
 
-        if (npwpOnlyNumber.length < 15) {
-            showValidationError('no_npwp', 'Nomer NPWP belum lengkap');
-            return;
-        }
+            const npwpOnlyNumber = data.no_npwp.replace(/\D/g, '');
+            if (npwpOnlyNumber.length < 15) {
+                showValidationError('no_npwp', 'Nomer NPWP belum lengkap');
+                return;
+            }
 
-        if (!data.no_npwp_16 || !data.no_npwp_16.trim()) {
-            showValidationError('no_npwp_16', 'Nomer NPWP 16 wajib diisi');
-            return;
-        }
+            if (!data.no_npwp_16 || !data.no_npwp_16.trim()) {
+                showValidationError('no_npwp_16', 'Nomer NPWP 16 wajib diisi');
+                return;
+            }
 
-        const npwp16OnlyNumber = data.no_npwp_16.replace(/\D/g, '');
+            const npwp16OnlyNumber = data.no_npwp_16.replace(/\D/g, '');
+            if (npwp16OnlyNumber.length < 16) {
+                showValidationError('no_npwp_16', 'Nomer NPWP 16 belum lengkap');
+                return;
+            }
 
-        if (npwp16OnlyNumber.length < 16) {
-            showValidationError('no_npwp_16', 'Nomer NPWP 16 belum lengkap');
-            return;
+            if (!data.nib || !data.nib.trim()) {
+                showValidationError('nib', 'NIB wajib diisi');
+                return;
+            }
+        } else {
+            // Perusahaan Luar Negeri: NPWP/NPWP16/NIB opsional, tapi jika diisi tetap divalidasi
+            if (data.no_npwp && data.no_npwp.trim() !== '') {
+                const npwpOnlyNumber = data.no_npwp.replace(/\D/g, '');
+                if (npwpOnlyNumber.length < 15) {
+                    showValidationError('no_npwp', 'Nomer NPWP belum lengkap');
+                    return;
+                }
+            }
+
+            if (data.no_npwp_16 && data.no_npwp_16.trim() !== '') {
+                const npwp16OnlyNumber = data.no_npwp_16.replace(/\D/g, '');
+                if (npwp16OnlyNumber.length < 16) {
+                    showValidationError('no_npwp_16', 'Nomer NPWP 16 belum lengkap');
+                    return;
+                }
+            }
         }
 
         if (!data.nama_personal || !data.nama_personal.trim()) {
@@ -368,7 +398,7 @@ export default function PublicCustomerForm({
             return;
         }
 
-        if (!data.no_telp_personal || data.no_telp_personal.trim().length <= 3) {
+        if (!data.no_telp_personal || !data.no_telp_personal[0] || data.no_telp_personal[0].trim().length <= 3) {
             showValidationError('no_telp_personal', 'No Telp Personal wajib diisi');
             return;
         }
@@ -388,13 +418,13 @@ export default function PublicCustomerForm({
             return customer?.attachments?.some((a) => a.type === type);
         };
 
-        if (rules.is_npwp && !getFileStatus(npwpFile, 'npwp')) {
+        if (data.jenis_perusahaan !== 'Perusahaan Luar Negeri' && rules.is_npwp && !getFileStatus(npwpFile, 'npwp')) {
             toast.error('Dokumen NPWP wajib diunggah.');
             setIsLoading(false);
             return;
         }
 
-        if (rules.is_nib && !isCustomerPerorangan && !getFileStatus(nibFile, 'nib')) {
+        if (data.jenis_perusahaan !== 'Perusahaan Luar Negeri' && rules.is_nib && !isCustomerPerorangan && !getFileStatus(nibFile, 'nib')) {
             toast.error('Dokumen NIB wajib diunggah.');
             setIsLoading(false);
             return;
@@ -587,6 +617,29 @@ export default function PublicCustomerForm({
                                         />
                                     </div>
                                     <div className="w-full">
+                                        <Label htmlFor="jenis_perusahaan">
+                                            Jenis Perusahaan <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Select
+                                            value={data.jenis_perusahaan || ''}
+                                            onValueChange={(value) => {
+                                                setData('jenis_perusahaan', value);
+                                                setErrors((prev) => ({
+                                                    ...prev,
+                                                    jenis_perusahaan: undefined,
+                                                }));
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Pilih Jenis Perusahaan" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Perusahaan Dalam Negeri">Perusahaan Dalam Negeri</SelectItem>
+                                                <SelectItem value="Perusahaan Luar Negeri">Perusahaan Luar Negeri</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="w-full">
                                         <Label htmlFor="bentuk_badan_usaha">
                                             Bentuk Badan Usaha <span className="text-red-500">*</span>
                                         </Label>
@@ -643,21 +696,54 @@ export default function PublicCustomerForm({
                                             placeholder="Masukkan Kota"
                                         />
                                     </div>
-                                    <div className="w-full">
-                                        <Label htmlFor="no_telp">
+                                    <div className="w-full space-y-2">
+                                        <Label>
                                             Nomor Telp Perusahaan <span className="text-red-500">*</span>
                                         </Label>
-                                        <PhoneInput
-                                            defaultCountry="id"
-                                            value={data.no_telp?.toString() || ''}
-                                            onChange={(phone) => setData('no_telp', phone)}
-                                            inputClassName={cn(
-                                                'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-                                                'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-                                                'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
-                                            )}
-                                            placeholder="Masukkan nomor telepon"
-                                        />
+                                        {data.no_telp.map((phone, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <div className="flex-1">
+                                                    <PhoneInput
+                                                        defaultCountry="id"
+                                                        value={phone || ''}
+                                                        onChange={(phoneVal) => {
+                                                            const newPhones = [...data.no_telp];
+                                                            newPhones[idx] = phoneVal;
+                                                            setData('no_telp', newPhones);
+                                                        }}
+                                                        inputClassName={cn(
+                                                            'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+                                                            'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+                                                            'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+                                                        )}
+                                                        placeholder="Masukkan nomor telepon"
+                                                    />
+                                                </div>
+                                                {data.no_telp.length > 1 && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        className="h-9 w-9 shrink-0 border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:border-transparent dark:bg-destructive dark:text-destructive-foreground dark:hover:bg-destructive/90"
+                                                        onClick={() => {
+                                                            const newPhones = data.no_telp.filter((_, i) => i !== idx);
+                                                            setData('no_telp', newPhones);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="mt-1"
+                                            onClick={() => setData('no_telp', [...data.no_telp, ''])}
+                                        >
+                                            <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Nomor
+                                        </Button>
                                     </div>
 
                                     <div className="w-full">
@@ -736,7 +822,7 @@ export default function PublicCustomerForm({
                                     </div>
                                     <div className="w-full">
                                         <Label htmlFor="no_npwp">
-                                            Nomor NPWP <span className="text-red-500">*</span>
+                                            Nomor NPWP {data.jenis_perusahaan !== 'Perusahaan Luar Negeri' && <span className="text-red-500">*</span>}
                                         </Label>
                                         <input
                                             type="text"
@@ -753,7 +839,7 @@ export default function PublicCustomerForm({
                                     </div>
                                     <div className="w-full">
                                         <Label htmlFor="no_npwp_16">
-                                            Nomor NPWP (16 Digit) <span className="text-red-500">*</span>
+                                            Nomor NPWP (16 Digit) {data.jenis_perusahaan !== 'Perusahaan Luar Negeri' && <span className="text-red-500">*</span>}
                                         </Label>
                                         <input
                                             type="text"
@@ -763,6 +849,23 @@ export default function PublicCustomerForm({
                                             value={data.no_npwp_16 ?? ''}
                                             onChange={(e) => setData('no_npwp_16', formatNpwp16(e.target.value))}
                                             placeholder="Masukkan nomor NPWP 16 digit"
+                                            className={cn(
+                                                'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+                                                'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+                                                'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="w-full">
+                                        <Label htmlFor="nib">
+                                            Nomor NIB {data.jenis_perusahaan !== 'Perusahaan Luar Negeri' && <span className="text-red-500">*</span>}
+                                        </Label>
+                                        <input
+                                            type="text"
+                                            id="nib"
+                                            value={data.nib ?? ''}
+                                            onChange={(e) => setData('nib', e.target.value)}
+                                            placeholder="Masukkan nomor NIB"
                                             className={cn(
                                                 'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
                                                 'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
@@ -841,21 +944,54 @@ export default function PublicCustomerForm({
                                                 placeholder="Masukkan jabatan personal"
                                             />
                                         </div>
-                                        <div className="w-full">
-                                            <Label htmlFor="no_telp_personal">
+                                        <div className="w-full space-y-2">
+                                            <Label>
                                                 No. Telp. <span className="text-red-500">*</span>
                                             </Label>
-                                            <PhoneInput
-                                                defaultCountry="id"
-                                                value={data.no_telp_personal?.toString() || ''}
-                                                onChange={(phone) => setData('no_telp_personal', phone)}
-                                                inputClassName={cn(
-                                                    'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-                                                    'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-                                                    'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
-                                                )}
-                                                placeholder="Masukkan no. telp personal"
-                                            />
+                                            {data.no_telp_personal.map((phone, idx) => (
+                                                <div key={idx} className="flex items-center gap-2">
+                                                    <div className="flex-1">
+                                                        <PhoneInput
+                                                            defaultCountry="id"
+                                                            value={phone || ''}
+                                                            onChange={(phoneVal) => {
+                                                                const newPhones = [...data.no_telp_personal];
+                                                                newPhones[idx] = phoneVal;
+                                                                setData('no_telp_personal', newPhones);
+                                                            }}
+                                                            inputClassName={cn(
+                                                                'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+                                                                'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+                                                                'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+                                                            )}
+                                                            placeholder="Masukkan no. telp personal"
+                                                        />
+                                                    </div>
+                                                    {data.no_telp_personal.length > 1 && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9 shrink-0 border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:border-transparent dark:bg-destructive dark:text-destructive-foreground dark:hover:bg-destructive/90"
+                                                            onClick={() => {
+                                                                const newPhones = data.no_telp_personal.filter((_, i) => i !== idx);
+                                                                setData('no_telp_personal', newPhones);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="mt-1"
+                                                onClick={() => setData('no_telp_personal', [...data.no_telp_personal, ''])}
+                                            >
+                                                <Plus className="mr-1.5 h-3.5 w-3.5" /> Tambah Nomor
+                                            </Button>
                                         </div>
                                         <div className="w-full">
                                             <Label htmlFor="email_personal">

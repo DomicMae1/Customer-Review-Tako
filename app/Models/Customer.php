@@ -24,6 +24,7 @@ class Customer extends Model
         'kategori_usaha',
         'nama_perusahaan',
         'bentuk_badan_usaha',
+        'jenis_perusahaan',
         'alamat_lengkap',
         'kota',
         'no_telp',

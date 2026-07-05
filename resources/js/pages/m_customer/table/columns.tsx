@@ -104,13 +104,22 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
                 const customer = row.original;
                 const { auth } = usePage().props as any;
                 const currentUser = auth.user;
-
-                const currentUserRole = currentUser.roles?.[0]?.name;
+                const userPermissions = currentUser?.permissions || [];
+                const currentUserRole = currentUser?.roles?.[0]?.name;
                 const isAdmin = currentUserRole === 'admin';
 
-                const canEdit =
-                    !customer.submit_1_timestamps &&
-                    (customer.user_id === currentUser.id || (customer.creator?.role && currentUserRole && customer.creator.role === currentUserRole));
+                const hasPermission = (perm: string) => isAdmin || userPermissions.includes(perm);
+
+                const canView = hasPermission('customer.view');
+                const canEditPermission = hasPermission('customer.update');
+                const canPdf = hasPermission('customer.pdf');
+                const canDelete = hasPermission('customer.delete');
+
+                // Keep existing business logic for edit: only if not submitted yet, and creator matches (unless admin)
+                const canEdit = canEditPermission && (
+                    isAdmin ||
+                    (!customer.submit_1_timestamps && (customer.user_id === currentUser.id || (customer.creator?.role && currentUserRole && customer.creator.role === currentUserRole)))
+                );
 
                 const isDesktop = useMediaQuery('(min-width: 768px)');
 
@@ -123,35 +132,35 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
                 if (isDesktop) {
                     return (
                         <div className="flex items-center justify-start gap-2">
-                            {!isAdmin && (
-                                <>
-                                    <Link href={`/customer/${customer.id}`}>
-                                        <Button variant="ghost" size="icon" title="View Customer" className={iconButtonClass}>
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
-                                    </Link>
-
-                                    {canEdit && (
-                                        <Link href={`/customer/${customer.id}/edit`}>
-                                            <Button variant="ghost" size="icon" title="Edit Customer" className={iconButtonClass}>
-                                                <Pencil className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    )}
-
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Download PDF"
-                                        className={iconButtonClass}
-                                        onClick={() => customer.id && downloadPdf(customer.id, customer.nama_perusahaan)}
-                                    >
-                                        <Download className="h-4 w-4" />
+                            {canView && (
+                                <Link href={`/customer/${customer.id}`}>
+                                    <Button variant="ghost" size="icon" title="View Customer" className={iconButtonClass}>
+                                        <Eye className="h-4 w-4" />
                                     </Button>
-                                </>
+                                </Link>
                             )}
 
-                            {isAdmin && (
+                            {canEdit && (
+                                <Link href={`/customer/${customer.id}/edit`}>
+                                    <Button variant="ghost" size="icon" title="Edit Customer" className={iconButtonClass}>
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            )}
+
+                            {canPdf && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Download PDF"
+                                    className={iconButtonClass}
+                                    onClick={() => customer.id && downloadPdf(customer.id, customer.nama_perusahaan)}
+                                >
+                                    <Download className="h-4 w-4" />
+                                </Button>
+                            )}
+
+                            {canDelete && (
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -168,35 +177,35 @@ export const columns = (): ColumnDef<MasterCustomer>[] => {
 
                 return (
                     <div className="flex items-center justify-end gap-2">
-                        {!isAdmin && (
-                            <>
-                                <Link href={`/customer/${customer.id}`}>
-                                    <Button size="icon" variant="ghost" title="View Customer" className={mobileIconButtonClass}>
-                                        <Eye className="h-4 w-4 text-gray-700" />
-                                    </Button>
-                                </Link>
-
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    title="Download PDF"
-                                    className={mobileIconButtonClass}
-                                    onClick={() => customer.id && downloadPdf(customer.id, customer.nama_perusahaan)}
-                                >
-                                    <Download className="h-4 w-4 text-gray-700 dark:text-gray-200" />
+                        {canView && (
+                            <Link href={`/customer/${customer.id}`}>
+                                <Button size="icon" variant="ghost" title="View Customer" className={mobileIconButtonClass}>
+                                    <Eye className="h-4 w-4 text-gray-700" />
                                 </Button>
-
-                                {canEdit && (
-                                    <Link href={`/customer/${customer.id}/edit`}>
-                                        <Button size="icon" variant="ghost" title="Edit Customer" className={mobileIconButtonClass}>
-                                            <Pencil className="h-4 w-4 text-gray-700 dark:text-gray-200" />
-                                        </Button>
-                                    </Link>
-                                )}
-                            </>
+                            </Link>
                         )}
 
-                        {isAdmin && (
+                        {canPdf && (
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                title="Download PDF"
+                                className={mobileIconButtonClass}
+                                onClick={() => customer.id && downloadPdf(customer.id, customer.nama_perusahaan)}
+                            >
+                                <Download className="h-4 w-4 text-gray-700 dark:text-gray-200" />
+                            </Button>
+                        )}
+
+                        {canEdit && (
+                            <Link href={`/customer/${customer.id}/edit`}>
+                                <Button size="icon" variant="ghost" title="Edit Customer" className={mobileIconButtonClass}>
+                                    <Pencil className="h-4 w-4 text-gray-700 dark:text-gray-200" />
+                                </Button>
+                            </Link>
+                        )}
+
+                        {canDelete && (
                             <Button
                                 size="icon"
                                 variant="ghost"

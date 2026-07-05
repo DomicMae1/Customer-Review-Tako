@@ -11,6 +11,14 @@ class CustomerDataController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        if (!$user || !$user->can('customer.view')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Lacking customer.view permission.',
+            ], 403);
+        }
+
         $customers = Customer::query()
             ->select([
                 'id',

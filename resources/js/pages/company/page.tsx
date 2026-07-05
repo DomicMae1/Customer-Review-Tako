@@ -28,6 +28,9 @@ interface FormState {
     notify_1: string;
     notify_2: string;
     logo_url: string;
+    is_npwp: boolean;
+    is_nib: boolean;
+    is_sptkp: boolean;
     is_ppjk: boolean;
 }
 
@@ -50,6 +53,9 @@ export default function ManageCompany() {
         notify_1: '',
         notify_2: '',
         logo_url: '',
+        is_npwp: false,
+        is_nib: false,
+        is_sptkp: false,
         is_ppjk: false,
     };
 
@@ -110,6 +116,9 @@ export default function ManageCompany() {
             notify_1: company.notify_1 || '',
             notify_2: company.notify_2 || '',
             logo_url: company.logo_url || '',
+            is_npwp: Boolean(company.is_npwp),
+            is_nib: Boolean(company.is_nib),
+            is_sptkp: Boolean(company.is_sptkp),
             is_ppjk: Boolean(company.is_ppjk),
         });
 
@@ -276,24 +285,89 @@ export default function ManageCompany() {
                                 ))}
                             </div>
 
-                            <div className="flex items-start gap-3 rounded-lg border p-3">
-                                <input
-                                    id="is_ppjk"
-                                    type="checkbox"
-                                    checked={form.is_ppjk}
-                                    onChange={(e) =>
-                                        setForm((prev) => ({
-                                            ...prev,
-                                            is_ppjk: e.target.checked,
-                                        }))
-                                    }
-                                    className="mt-1 h-4 w-4"
-                                />
-                                <div className="space-y-1">
-                                    <Label htmlFor="is_ppjk">Perusahaan PPJK</Label>
-                                    <p className="text-muted-foreground text-xs">
-                                        Jika aktif, customer dari perusahaan ini boleh dikirim ke external API.
-                                    </p>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="flex items-start gap-3 rounded-lg border p-3">
+                                    <input
+                                        id="is_npwp"
+                                        type="checkbox"
+                                        checked={form.is_npwp}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                is_npwp: e.target.checked,
+                                            }))
+                                        }
+                                        className="mt-1 h-4 w-4"
+                                    />
+                                    <div className="space-y-1">
+                                        <Label htmlFor="is_npwp">Wajib NPWP</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Wajib mengunggah dokumen NPWP.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start gap-3 rounded-lg border p-3">
+                                    <input
+                                        id="is_nib"
+                                        type="checkbox"
+                                        checked={form.is_nib}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                is_nib: e.target.checked,
+                                            }))
+                                        }
+                                        className="mt-1 h-4 w-4"
+                                    />
+                                    <div className="space-y-1">
+                                        <Label htmlFor="is_nib">Wajib NIB</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Wajib mengunggah dokumen NIB.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start gap-3 rounded-lg border p-3">
+                                    <input
+                                        id="is_sptkp"
+                                        type="checkbox"
+                                        checked={form.is_sptkp}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                is_sptkp: e.target.checked,
+                                            }))
+                                        }
+                                        className="mt-1 h-4 w-4"
+                                    />
+                                    <div className="space-y-1">
+                                        <Label htmlFor="is_sptkp">Wajib SPTKP</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Wajib mengunggah dokumen SPTKP.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start gap-3 rounded-lg border p-3">
+                                    <input
+                                        id="is_ppjk"
+                                        type="checkbox"
+                                        checked={form.is_ppjk}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                is_ppjk: e.target.checked,
+                                            }))
+                                        }
+                                        className="mt-1 h-4 w-4"
+                                    />
+                                    <div className="space-y-1">
+                                        <Label htmlFor="is_ppjk">Perusahaan PPJK</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Customer boleh dikirim ke external API.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
