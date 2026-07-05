@@ -93,8 +93,8 @@ export default function ManageUsers() {
             return;
         }
 
-        if (selectedEditRoleName === 'user' && !editCompany) {
-            toast.error('Please select a company for User role.');
+        if (selectedEditRoleName === 'marketing' && !editCompany) {
+            toast.error('Please select a company for Marketing role.');
             return;
         }
 
@@ -117,7 +117,7 @@ export default function ManageUsers() {
             NIK: nikOnlyNumber,
             email: editEmail,
             role: editRole,
-            id_perusahaan: selectedEditRoleName === 'user' ? editCompany : null,
+            id_perusahaan: selectedEditRoleName === 'marketing' ? editCompany : null,
         };
 
         if (userIdToEdit !== null) {
@@ -279,7 +279,7 @@ export default function ManageUsers() {
                             </Select>
                         </div>
 
-                        {selectedEditRoleName === 'user' && (
+                        {selectedEditRoleName === 'marketing' && (
                             <div>
                                 <Label htmlFor="edit_company">Perusahaan</Label>
                                 <Select onValueChange={setEditCompany} value={editCompany}>

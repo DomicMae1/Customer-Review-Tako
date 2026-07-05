@@ -131,8 +131,8 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             return;
         }
 
-        if (selectedRole === 'user' && !selectedCompany) {
-            console.error('Perusahaan harus dipilih untuk role user.');
+        if (selectedRoleName === 'marketing' && !selectedCompany) {
+            console.error('Perusahaan harus dipilih untuk role marketing.');
             return;
         }
 
@@ -142,7 +142,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
             NIK: nikOnlyNumber,
             email,
             role: selectedRole,
-            id_perusahaan: selectedRoleName === 'user' ? Number(selectedCompany) : null,
+            id_perusahaan: selectedRoleName === 'marketing' ? Number(selectedCompany) : null,
         };
 
         router.post('/users', data, {
@@ -367,7 +367,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                                 </SelectContent>
                             </Select>
                         </div>
-                        {selectedRoleName === 'user' && (
+                        {selectedRoleName === 'marketing' && (
                             <div>
                                 <Label htmlFor="company">Perusahaan</Label>
                                 <Select

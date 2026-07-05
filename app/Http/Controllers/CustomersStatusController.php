@@ -187,7 +187,7 @@ class CustomersStatusController extends Controller
     private function getProblematicNpwpRecipientEmails(?Perusahaan $perusahaan, string $submitterRole): array
     {
         $rolesToNotify = match ($submitterRole) {
-            'user' => ['manager', 'direktur', 'auditor'],
+            'marketing' => ['manager', 'direktur', 'auditor'],
             'manager' => ['direktur', 'auditor'],
             'direktur' => ['auditor'],
             default => [],
@@ -259,8 +259,8 @@ class CustomersStatusController extends Controller
         $rawRole  = strtolower($user->getRoleNames()->first());
 
         $roleMap = [
-            'marketing' => 'user',
-            'user'      => 'user',
+            'marketing' => 'marketing',
+            'user'      => 'marketing',
             'manager'   => 'manager',
             'direktur'  => 'direktur',
             'director'  => 'direktur',
@@ -269,9 +269,40 @@ class CustomersStatusController extends Controller
         ];
 
         $role = $roleMap[$rawRole] ?? $rawRole;
+
+        switch ($role) {
+            case 'marketing':
+                if (!$user->can('customer.create') && !$user->can('customer.update')) {
+                    abort(403, 'Unauthorized. Lacking customer creation or update permission.');
+                }
+                break;
+            case 'manager':
+                if (!$user->can('customer.approve.manager')) {
+                    abort(403, 'Unauthorized. Lacking manager approval permission.');
+                }
+                break;
+            case 'direktur':
+                if (!$user->can('customer.approve.direktur')) {
+                    abort(403, 'Unauthorized. Lacking direktur approval permission.');
+                }
+                break;
+            case 'lawyer':
+                if (!$user->can('customer.approve.lawyer')) {
+                    abort(403, 'Unauthorized. Lacking lawyer approval permission.');
+                }
+                break;
+            case 'auditor':
+                if (!$user->can('customer.approve.auditor')) {
+                    abort(403, 'Unauthorized. Lacking auditor approval permission.');
+                }
+                break;
+            default:
+                abort(403, 'Unauthorized. Role tidak dikenali.');
+        }
+
         $now = Carbon::now();
 
-        $triggerRoles = ['user', 'manager', 'direktur'];
+        $triggerRoles = ['marketing', 'manager', 'direktur'];
 
         $problematicCustomer = null;
         $problematicStatus = null;
@@ -363,13 +394,13 @@ class CustomersStatusController extends Controller
         $finalFilename = $request->input('attach_filename');
         $finalPath = $request->input('attach_path');
 
-        if (!in_array($role, ['user', 'manager', 'direktur', 'lawyer', 'auditor'])) {
+        if (!in_array($role, ['marketing', 'manager', 'direktur', 'lawyer', 'auditor'])) {
             $finalFilename = null;
             $finalPath = null;
         }
 
         switch ($role) {
-            case 'user':
+            case 'marketing':
                 $status->submit_1_timestamps = $now;
                 if ($finalFilename && $finalPath) {
                     $status->submit_1_nama_file = $finalFilename;
