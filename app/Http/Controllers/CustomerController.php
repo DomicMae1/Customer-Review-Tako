@@ -476,12 +476,9 @@ class CustomerController extends Controller
                 // Log process info
                 Log::info("[ImportCSV] Memproses Baris {$rowNumber} - NmMKota: '{$kotaRaw}', Hasil Deteksi: '{$customerPayload['jenis_perusahaan']}'");
 
-                // Domestic company validation: nib, no_npwp, no_npwp_16 are mandatory
+                // Domestic company validation: no_npwp, no_npwp_16 are mandatory
                 if ($customerPayload['jenis_perusahaan'] === 'Perusahaan Dalam Negeri') {
                     $missingFields = [];
-                    if (empty($customerPayload['nib'])) {
-                        $missingFields[] = 'nib';
-                    }
                     if (empty($customerPayload['no_npwp'])) {
                         $missingFields[] = 'no_npwp';
                     }
@@ -1989,8 +1986,8 @@ class CustomerController extends Controller
             'uid' => $customer->uid,
             'nama_perusahaan' => $customer->nama_perusahaan,
             'type' => 'external',
-            'email' => $customer->email,
-            'nama' => $customer->nama_personal,
+            'email' => $customer->email ?: null,
+            'nama' => $customer->nama_personal ?: null,
             'no_npwp' => preg_replace('/\D/', '', $customer->no_npwp ?? ''),
             'no_npwp_16' => preg_replace('/\D/', '', $customer->no_npwp_16 ?? ''),
             'no_nib' => $customer->nib ?? null,
