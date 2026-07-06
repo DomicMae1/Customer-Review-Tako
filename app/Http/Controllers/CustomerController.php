@@ -2305,10 +2305,33 @@ class CustomerController extends Controller
                 continue;
             }
 
-            $payload[$field] = $this->normalizeImportedTitleCase($payload[$field]);
+            if ($field === 'nama_perusahaan') {
+                $payload[$field] = $this->normalizeImportedUppercase($payload[$field]);
+            } else {
+                $payload[$field] = $this->normalizeImportedTitleCase($payload[$field]);
+            }
         }
 
         return $payload;
+    }
+
+    private function normalizeImportedUppercase($value): mixed
+    {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (function_exists('mb_strtoupper')) {
+            return mb_strtoupper($value, 'UTF-8');
+        }
+
+        return strtoupper($value);
     }
 
     private function normalizeImportedTitleCase($value): mixed
