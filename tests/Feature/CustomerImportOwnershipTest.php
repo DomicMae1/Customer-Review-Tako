@@ -129,35 +129,35 @@ class CustomerImportOwnershipTest extends TestCase
         $response->assertRedirect(route('customer.index'));
 
         // 5. Assert database records
-        $custA = Customer::where('nama_perusahaan', 'Cust A')->first();
+        $custA = Customer::where('nama_perusahaan', 'CUST A')->first();
         $this->assertNotNull($custA);
         $this->assertEquals($userA->id, $custA->id_user);
 
-        $custB = Customer::where('nama_perusahaan', 'Cust B')->first();
+        $custB = Customer::where('nama_perusahaan', 'CUST B')->first();
         $this->assertNotNull($custB);
         $this->assertEquals($userB2->id, $custB->id_user); // prioritized marketing
 
-        $custC = Customer::where('nama_perusahaan', 'Cust C')->first();
+        $custC = Customer::where('nama_perusahaan', 'CUST C')->first();
         $this->assertNotNull($custC);
         $this->assertEquals(min($userC1->id, $userC2->id), $custC->id_user); // consistent choosing (lowest ID)
 
-        $custD = Customer::where('nama_perusahaan', 'Cust D')->first();
+        $custD = Customer::where('nama_perusahaan', 'CUST D')->first();
         $this->assertNotNull($custD);
         $this->assertEquals($userA->id, $custD->id_user); // fallback to first marketing user (userA has role marketing and has lowest ID)
 
-        $custE = Customer::where('nama_perusahaan', 'Cust E')->first();
+        $custE = Customer::where('nama_perusahaan', 'CUST E')->first();
         $this->assertNotNull($custE);
         $this->assertEquals($userA->id, $custE->id_user); // fallback to first marketing user (userA has role marketing and has lowest ID)
 
-        $custF = Customer::where('nama_perusahaan', 'Cust F')->first();
+        $custF = Customer::where('nama_perusahaan', 'CUST F')->first();
         $this->assertNotNull($custF);
         $this->assertEquals($userNenik->id, $custF->id_user); // uppercase match
 
-        $custG = Customer::where('nama_perusahaan', 'Cust G')->first();
+        $custG = Customer::where('nama_perusahaan', 'CUST G')->first();
         $this->assertNotNull($custG);
         $this->assertEquals($userNenik->id, $custG->id_user); // lowercase match
 
-        $custH = Customer::where('nama_perusahaan', 'Cust H')->first();
+        $custH = Customer::where('nama_perusahaan', 'CUST H')->first();
         $this->assertNotNull($custH);
         $this->assertEquals($userNenik->id, $custH->id_user); // spaces normalization match
 
@@ -210,7 +210,7 @@ class CustomerImportOwnershipTest extends TestCase
                 ]);
             
             // Check if Cust X is saved with null owner
-            $custX = Customer::where('nama_perusahaan', 'Cust X')->first();
+            $custX = Customer::where('nama_perusahaan', 'CUST X')->first();
             if ($custX) {
                 $this->assertNull($custX->id_user);
             }

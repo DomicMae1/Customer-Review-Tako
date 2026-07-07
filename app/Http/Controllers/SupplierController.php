@@ -1879,7 +1879,7 @@ class SupplierController extends Controller
 
         $payload = [
             'uid_perusahaan' => $perusahaan->uid,
-            'uid_marketing' => $uidMarketingOverride ?? $user->uid ?? '',
+            'uid_marketing' => $user->hasRole('marketing') ? ($user->uid ?? null) : null,
             'uid' => $supplier->uid,
             'nama_perusahaan' => $supplier->nama_perusahaan,
             'type' => 'external',
