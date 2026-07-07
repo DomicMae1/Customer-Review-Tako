@@ -551,7 +551,8 @@ class CustomerController extends Controller
         // Kegagalan API tidak merusak data import yang sudah tersimpan.
         foreach ($newCustomersForApiSync as $syncedCustomer) {
             try {
-                $this->sendCustomerToExternalApi($syncedCustomer, $user);
+                $syncUser = $this->findUserById($syncedCustomer->id_user);
+                $this->sendCustomerToExternalApi($syncedCustomer, $syncUser ?? $user);
 
                 Log::info('[ImportCSV] Berhasil sync customer ke external API.', [
                     'customer_id'   => $syncedCustomer->id,
@@ -1982,7 +1983,7 @@ class CustomerController extends Controller
 
         $payload = [
             'uid_perusahaan' => $perusahaan->uid,
-            'uid_marketing' => $uidMarketingOverride ?? $user->uid ?? '',
+            'uid_marketing' => $user->hasRole('marketing') ? ($user->uid ?? null) : null,
             'uid' => $customer->uid,
             'nama_perusahaan' => $customer->nama_perusahaan,
             'type' => 'external',
@@ -2543,5 +2544,10 @@ class CustomerController extends Controller
                    substr($digits, 12, 4);
         }
         return $digits;
+    }
+
+    protected function findUserById(?int $id): ?User
+    {
+        return $id ? User::find($id) : null;
     }
 }
