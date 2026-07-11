@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerAttach;
 use App\Models\Perusahaan;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -46,35 +47,31 @@ class ExternalCustomerReceiveController extends Controller
             ], 403);
         }
 
-        $idPerusahaan = $user->id_perusahaan;
+        // Temporary logging of headers and inputs before validation
+        Log::info('External customer API received headers:', $request->headers->all());
+        Log::info('External customer API received input:', $request->all());
 
-        if (!$idPerusahaan) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal.',
-                'errors' => [
-                    'id_perusahaan' => [
-                        'User token ini belum memiliki perusahaan.',
-                    ],
-                ],
-            ], 422);
-        }
-
-        $perusahaan = Perusahaan::find($idPerusahaan);
-
-        if (!$perusahaan) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal.',
-                'errors' => [
-                    'id_perusahaan' => [
-                        'Perusahaan tidak ditemukan.',
-                    ],
-                ],
-            ], 422);
+        // Preprocess raw JSON content to strip invalid trailing commas
+        $rawContent = $request->getContent();
+        if (!empty($rawContent)) {
+            $firstChar = substr(trim($rawContent), 0, 1);
+            if ($firstChar === '{' || $firstChar === '[') {
+                $cleanedContent = preg_replace('/,\s*([}\]])/', '$1', $rawContent);
+                $decoded = json_decode($cleanedContent, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $request->merge($decoded);
+                    Log::info('External customer API parsed and merged cleaned JSON input:', $request->all());
+                } else {
+                    Log::warning('External customer API failed to decode cleaned JSON: ' . json_last_error_msg());
+                }
+            }
         }
 
         $validator = Validator::make($request->all(), [
+            'uid' => 'required|string',
+            'uid_marketing' => 'required|string',
+            'uid_perusahaan' => 'required|string',
+            'jenis_perusahaan' => 'nullable|string',
             'kategori_usaha' => 'required|string',
             'nama_perusahaan' => 'required|string',
             'bentuk_badan_usaha' => 'required|string',
@@ -117,6 +114,32 @@ class ExternalCustomerReceiveController extends Controller
 
         $validated = $validator->validated();
 
+        $marketingUser = User::where('uid', $validated['uid_marketing'])->first();
+        if (!$marketingUser) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal.',
+                'errors' => [
+                    'uid_marketing' => [
+                        'User marketing tidak ditemukan.',
+                    ],
+                ],
+            ], 422);
+        }
+
+        $targetPerusahaan = Perusahaan::where('uid', $validated['uid_perusahaan'])->first();
+        if (!$targetPerusahaan) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal.',
+                'errors' => [
+                    'uid_perusahaan' => [
+                        'Perusahaan tidak ditemukan.',
+                    ],
+                ],
+            ], 422);
+        }
+
         // Separate customer text data from uploaded files
         $customerFields = [
             'kategori_usaha', 'nama_perusahaan', 'bentuk_badan_usaha', 'alamat_lengkap',
@@ -124,6 +147,9 @@ class ExternalCustomerReceiveController extends Controller
             'status_perpajakan', 'no_npwp', 'no_npwp_16', 'nib', 'nama_pj', 'no_ktp_pj',
             'no_telp_pj', 'nama_personal', 'jabatan_personal', 'no_telp_personal', 'email_personal'
         ];
+        if ($request->has('jenis_perusahaan')) {
+            $customerFields[] = 'jenis_perusahaan';
+        }
         $customerData = array_intersect_key($validated, array_flip($customerFields));
 
         if (isset($customerData['no_npwp_16']) && $customerData['no_npwp_16'] !== '') {
@@ -159,11 +185,12 @@ class ExternalCustomerReceiveController extends Controller
             DB::connection('tako-customer')->beginTransaction();
             DB::connection('tako-perusahaan')->beginTransaction();
 
-            $customer = Customer::create(array_merge($customerData, [
-                'uid' => $this->generateCustomerUid(),
-                'id_user' => $user->id,
-                'id_perusahaan' => $idPerusahaan,
+            $customer = new Customer(array_merge($customerData, [
+                'id_user' => $marketingUser->id,
+                'id_perusahaan' => $targetPerusahaan->id,
             ]));
+            $customer->uid = $validated['uid'];
+            $customer->save();
 
             // Mapping dari request keys ke type attachment & order string
             $attachmentsMap = [
@@ -188,11 +215,8 @@ class ExternalCustomerReceiveController extends Controller
             // Setup Storage disk & Company slug
             $disk = Storage::disk('customers_external');
             $companySlug = 'general';
-            if ($idPerusahaan) {
-                $perusahaan = Perusahaan::find($idPerusahaan);
-                if ($perusahaan) {
-                    $companySlug = Str::slug($perusahaan->nama_perusahaan);
-                }
+            if ($targetPerusahaan) {
+                $companySlug = Str::slug($targetPerusahaan->nama_perusahaan);
             }
 
             $targetDir = "{$companySlug}/attachment";
@@ -287,6 +311,7 @@ class ExternalCustomerReceiveController extends Controller
                     'kategori_usaha' => $customer->kategori_usaha,
                     'nama_perusahaan' => $customer->nama_perusahaan,
                     'bentuk_badan_usaha' => $customer->bentuk_badan_usaha,
+                    'jenis_perusahaan' => $customer->jenis_perusahaan,
                     'alamat_lengkap' => $customer->alamat_lengkap,
                     'kota' => $customer->kota,
                     'no_telp' => $customer->no_telp,

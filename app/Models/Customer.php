@@ -141,6 +141,10 @@ class Customer extends Model
     protected static function booted()
     {
         static::creating(function ($customer) {
+            if (!empty($customer->uid)) {
+                return;
+            }
+
             $existingUid = null;
 
             if (!empty($customer->no_npwp) || !empty($customer->no_npwp_16)) {
