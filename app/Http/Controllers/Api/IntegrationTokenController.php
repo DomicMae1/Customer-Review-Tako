@@ -29,20 +29,32 @@ class IntegrationTokenController extends Controller
         // pakai nama default (tanpa device_name dari request)
         $tokenName = 'integration-token';
 
-        // optional: hapus token lama dengan nama yang sama
-        $user->tokens()->where('name', $tokenName)->delete();
+        // Check if user has an active integration token in personal_access_tokens and in users table
+        $hasToken = $user->tokens()->where('name', $tokenName)->exists();
 
-        // buat token baru
-        $token = $user->createToken(
-            $tokenName,
-            ['customer:read'],
-            now()->addMinutes(30)
-        );
+        if ($hasToken && $user->integration_token) {
+            $plainToken = $user->integration_token;
+        } else {
+            // hapus token lama dengan nama yang sama jika ada ketidaksesuaian/stale
+            $user->tokens()->where('name', $tokenName)->delete();
+
+            // buat token baru selamanya (tanpa expiration)
+            $token = $user->createToken(
+                $tokenName,
+                ['customer:read']
+            );
+
+            $plainToken = $token->plainTextToken;
+
+            // simpan plain text token ke user
+            $user->integration_token = $plainToken;
+            $user->save();
+        }
 
         return response()->json([
             'token_type' => 'Bearer',
-            'access_token' => $token->plainTextToken,
-            'expires_at' => now()->addMinutes(30)->toDateTimeString(),
+            'access_token' => $plainToken,
+            'expires_at' => null,
         ]);
     }
 }
