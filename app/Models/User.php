@@ -31,7 +31,6 @@ class User extends Authenticatable
         'email',
         'password',
         'id_perusahaan',
-        'integration_token',
     ];
 
     /**

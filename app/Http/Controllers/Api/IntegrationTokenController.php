@@ -26,29 +26,40 @@ class IntegrationTokenController extends Controller
             ]);
         }
 
-        // pakai nama default (tanpa device_name dari request)
-        $tokenName = 'integration-token';
+        $tokenNamePrefix = 'integration-token|';
 
-        // Check if user has an active integration token in personal_access_tokens and in users table
-        $hasToken = $user->tokens()->where('name', $tokenName)->exists();
+        // Check if there is an existing token for this user with a name starting with 'integration-token|'
+        $existingToken = $user->tokens()->where('name', 'like', $tokenNamePrefix . '%')->first();
 
-        if ($hasToken && $user->integration_token) {
-            $plainToken = $user->integration_token;
+        if ($existingToken) {
+            // Extract the plain text token from the name
+            $plainToken = str_replace($tokenNamePrefix, '', $existingToken->name);
         } else {
-            // hapus token lama dengan nama yang sama jika ada ketidaksesuaian/stale
-            $user->tokens()->where('name', $tokenName)->delete();
+            // Cleanup any old integration tokens (if any exist under old naming or placeholders)
+            $user->tokens()->where('name', 'integration-token')->delete();
+            $user->tokens()->where('name', 'like', $tokenNamePrefix . '%')->delete();
 
-            // buat token baru selamanya (tanpa expiration)
-            $token = $user->createToken(
-                $tokenName,
-                ['customer:read']
-            );
+            // Try to create a new token without expiration (null).
+            // If the database has a NOT NULL constraint on expires_at, we fall back to setting a far-future date (100 years).
+            try {
+                $token = $user->createToken(
+                    'integration-token-temp',
+                    ['customer:read']
+                );
+            } catch (\Throwable $e) {
+                $token = $user->createToken(
+                    'integration-token-temp',
+                    ['customer:read'],
+                    now()->addYears(100)
+                );
+            }
 
             $plainToken = $token->plainTextToken;
 
-            // simpan plain text token ke user
-            $user->integration_token = $plainToken;
-            $user->save();
+            // Save the plain-text token inside the name column so it can be retrieved on subsequent calls
+            $token->accessToken->forceFill([
+                'name' => $tokenNamePrefix . $plainToken,
+            ])->save();
         }
 
         return response()->json([
