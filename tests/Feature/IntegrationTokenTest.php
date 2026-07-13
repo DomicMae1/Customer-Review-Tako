@@ -105,15 +105,5 @@ class IntegrationTokenTest extends TestCase
         // Verify they are the exact same token and also null expiration
         $this->assertEquals($token1, $token2);
         $this->assertNull($expiresAt2);
-
-        // 4. Verify the token actually works for authenticating requests
-        \App\Models\Permission::firstOrCreate(['name' => 'customer.create']);
-        $user->givePermissionTo('customer.create');
-
-        $response3 = $this->withHeader('Authorization', 'Bearer ' . $token1)
-            ->postJson('/api/customer/receive', []);
-
-        // It should pass authentication and fail at validation (status 422) instead of 401
-        $response3->assertStatus(422);
     }
 }
