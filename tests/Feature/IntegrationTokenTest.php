@@ -63,4 +63,57 @@ class IntegrationTokenTest extends TestCase
 
         $response->assertStatus(200);
     }
+
+    public function test_integration_token_is_permanent_and_does_not_change()
+    {
+        // 1. Create a user
+        $user = User::factory()->create([
+            'email' => 'persistent-integration@tako.com',
+            'password' => Hash::make('secret123'),
+        ]);
+
+        // 2. Request token for the first time
+        $response1 = $this->postJson('/api/integration/token', [
+            'email' => 'persistent-integration@tako.com',
+            'password' => 'secret123',
+        ]);
+
+        $response1->assertStatus(200)
+            ->assertJsonStructure([
+                'token_type',
+                'access_token',
+                'expires_at',
+            ]);
+
+        $token1 = $response1->json('access_token');
+        $expiresAt1 = $response1->json('expires_at');
+
+        // Verify expires_at is null (permanent)
+        $this->assertNull($expiresAt1);
+
+        // 3. Request token for the second time with the same credentials
+        $response2 = $this->postJson('/api/integration/token', [
+            'email' => 'persistent-integration@tako.com',
+            'password' => 'secret123',
+        ]);
+
+        $response2->assertStatus(200);
+
+        $token2 = $response2->json('access_token');
+        $expiresAt2 = $response2->json('expires_at');
+
+        // Verify they are the exact same token and also null expiration
+        $this->assertEquals($token1, $token2);
+        $this->assertNull($expiresAt2);
+
+        // 4. Verify the token actually works for authenticating requests
+        \App\Models\Permission::firstOrCreate(['name' => 'customer.create']);
+        $user->givePermissionTo('customer.create');
+
+        $response3 = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson('/api/customer/receive', []);
+
+        // It should pass authentication and fail at validation (status 422) instead of 401
+        $response3->assertStatus(422);
+    }
 }
