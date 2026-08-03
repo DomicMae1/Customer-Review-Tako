@@ -47,6 +47,16 @@ class Supplier extends Model
         'email_personal',
     ];
 
+    public function setNamaPjAttribute($value): void
+    {
+        $this->attributes['nama_pj'] = $value ?? '';
+    }
+
+    public function setNoKtpPjAttribute($value): void
+    {
+        $this->attributes['no_ktp_pj'] = $value ?? '';
+    }
+
     public function setNoTelpAttribute($value): void
     {
         if (is_array($value)) {
@@ -268,3 +278,4 @@ class Supplier extends Model
         return array_values(array_unique($phones));
     }
 }
+

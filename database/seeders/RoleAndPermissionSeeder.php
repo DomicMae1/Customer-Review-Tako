@@ -102,6 +102,7 @@ class RoleAndPermissionSeeder extends Seeder
         $newPermissions = [
             // Customer
             'customer.view',
+            'customer.bank.view',
             'customer.create',
             'customer.update',
             'customer.delete',
@@ -115,6 +116,7 @@ class RoleAndPermissionSeeder extends Seeder
 
             // Supplier
             'supplier.view',
+            'supplier.bank.view',
             'supplier.create',
             'supplier.update',
             'supplier.delete',
