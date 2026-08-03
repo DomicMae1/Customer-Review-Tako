@@ -31,6 +31,7 @@ interface FormState {
     is_npwp: boolean;
     is_nib: boolean;
     is_sptkp: boolean;
+    is_ktp: boolean;
     is_ppjk: boolean;
 }
 
@@ -56,6 +57,7 @@ export default function ManageCompany() {
         is_npwp: false,
         is_nib: false,
         is_sptkp: false,
+        is_ktp: false,
         is_ppjk: false,
     };
 
@@ -119,6 +121,7 @@ export default function ManageCompany() {
             is_npwp: Boolean(company.is_npwp),
             is_nib: Boolean(company.is_nib),
             is_sptkp: Boolean(company.is_sptkp),
+            is_ktp: Boolean(company.is_ktp),
             is_ppjk: Boolean(company.is_ppjk),
         });
 
@@ -345,6 +348,27 @@ export default function ManageCompany() {
                                         <Label htmlFor="is_sptkp">Wajib SPTKP</Label>
                                         <p className="text-muted-foreground text-xs">
                                             Wajib mengunggah dokumen SPTKP.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start gap-3 rounded-lg border p-3">
+                                    <input
+                                        id="is_ktp"
+                                        type="checkbox"
+                                        checked={form.is_ktp}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                is_ktp: e.target.checked,
+                                            }))
+                                        }
+                                        className="mt-1 h-4 w-4"
+                                    />
+                                    <div className="space-y-1">
+                                        <Label htmlFor="is_ktp">Wajib KTP</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Wajib mengunggah dokumen KTP.
                                         </p>
                                     </div>
                                 </div>

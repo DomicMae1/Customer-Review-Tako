@@ -60,11 +60,15 @@ class HandleInertiaRequests extends Middleware
                         }
                     }
 
+                    $permissions = $user->hasRole('admin')
+                        ? \Spatie\Permission\Models\Permission::pluck('name')
+                        : $user->getAllPermissions()->pluck('name');
+
                     return array_merge(
                         $user->toArray(),
                         [
                             'perusahaan' => $perusahaan,
-                            'permissions' => $user->getAllPermissions()->pluck('name'),
+                            'permissions' => $permissions,
                         ]
                     );
                 },

@@ -90,7 +90,7 @@ export default function BankSupplierPage() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bank Supplier" />
 
-            <div className="md:p-4">
+            <div className="min-w-0 overflow-x-hidden md:p-4">
                 {/* Header */}
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ export default function BankSupplierPage() {
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto rounded-md border">
+                <div className="w-full max-w-full overflow-x-auto rounded-md border">
                     <Table>
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (

@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
         }
 
         $users = [
-            ['name' => 'John Doe', 'email' => 'marketing@gmail.com', 'password' => 'CR_tako@2025', 'role' => 'marketing',     'id_perusahaan' => 1],
+            ['name' => 'John Doe', 'email' => 'marketing@gmail.com', 'password' => 'CR_tako@2025', 'role' => 'marketing', 'id_perusahaan' => 1],
             ['name' => 'Rose Doe', 'email' => 'manager@gmail.com', 'password' => 'CR_tako@2025', 'role' => 'manager',  'id_perusahaan' => 1],
             ['name' => 'Emi Rina', 'email' => 'direktur@gmail.com', 'password' => 'CR_tako@2025', 'role' => 'direktur', 'id_perusahaan' => 1],
             ['name' => 'Tatsuya', 'email' => 'lawyer@gmail.com', 'password' => 'CR_tako@2025', 'role' => 'lawyer',   'id_perusahaan' => 1],

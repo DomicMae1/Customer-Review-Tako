@@ -38,9 +38,9 @@ export const columns = (onEditClick: (perusahaan: Perusahaan) => void, onDeleteC
             return (
                 <div className="max-w-[260px] truncate py-2">
                     {domainName ? (
-                        <Badge variant="outline" className="max-w-[260px] truncate">
+                        <span className="max-w-[260px] truncate text-sm font-medium text-foreground">
                             {domainName}
-                        </Badge>
+                        </span>
                     ) : (
                         <Badge variant="secondary">tidak ada</Badge>
                     )}

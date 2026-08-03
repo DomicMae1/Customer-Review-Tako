@@ -33,8 +33,8 @@ class BankCustomerController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->can('customer.view')) {
-            throw UnauthorizedException::forPermissions(['customer.view']);
+        if (!$user->can('customer.bank.view')) {
+            throw UnauthorizedException::forPermissions(['customer.bank.view']);
         }
 
         $query = Customer::with(['perusahaan'])->whereNotNull('id_perusahaan');

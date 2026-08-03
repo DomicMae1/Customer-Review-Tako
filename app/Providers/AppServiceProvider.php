@@ -23,6 +23,11 @@ class AppServiceProvider extends ServiceProvider
         date_default_timezone_set(config('app.timezone'));
         Carbon::setLocale('id');
 
+        // Grant all permissions to 'admin' role automatically
+        \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
+            return $user->hasRole('admin') ? true : null;
+        });
+
         \Inertia\Inertia::share([
             'company' => fn() => [
                 'id' => session('company_id'),

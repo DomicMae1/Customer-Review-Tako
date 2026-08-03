@@ -94,6 +94,7 @@ class PerusahaanController extends Controller
             'is_npwp'         => 'nullable|boolean',
             'is_nib'          => 'nullable|boolean',
             'is_sptkp'        => 'nullable|boolean',
+            'is_ktp'          => 'nullable|boolean',
             'is_ppjk'         => 'nullable|boolean',
             'company_logo'    => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:5120',
         ]);
@@ -109,6 +110,7 @@ class PerusahaanController extends Controller
             'is_npwp'         => (bool) ($request->input('is_npwp', false)),
             'is_nib'          => (bool) ($request->input('is_nib', false)),
             'is_sptkp'        => (bool) ($request->input('is_sptkp', false)),
+            'is_ktp'          => (bool) ($request->input('is_ktp', false)),
             'is_ppjk'         => (bool) ($validated['is_ppjk'] ?? false),
         ]);
 
@@ -224,6 +226,7 @@ class PerusahaanController extends Controller
             'is_npwp' => 'nullable|boolean',
             'is_nib' => 'nullable|boolean',
             'is_sptkp' => 'nullable|boolean',
+            'is_ktp' => 'nullable|boolean',
             'is_ppjk' => 'nullable|boolean',
 
             // logo
@@ -294,6 +297,7 @@ class PerusahaanController extends Controller
         $perusahaan->is_npwp = (bool) ($request->input('is_npwp', false));
         $perusahaan->is_nib = (bool) ($request->input('is_nib', false));
         $perusahaan->is_sptkp = (bool) ($request->input('is_sptkp', false));
+        $perusahaan->is_ktp = (bool) ($request->input('is_ktp', false));
         $perusahaan->is_ppjk = (bool) ($validated['is_ppjk'] ?? false);
         $perusahaan->save(); // Simpan semua perubahan
 
