@@ -26,6 +26,7 @@ import { DataTablePagination } from './pagination';
 // ─── Same label / style maps as page.tsx ────────────────────────────────────
 const PERMISSION_LABELS: Record<string, string> = {
     'customer.view': 'Lihat Customer',
+    'customer.bank.view': 'Lihat Bank Customer',
     'customer.create': 'Tambah Customer',
     'customer.update': 'Edit Customer',
     'customer.delete': 'Hapus Customer',
@@ -36,6 +37,18 @@ const PERMISSION_LABELS: Record<string, string> = {
     'customer.approve.direktur': 'Approve (Direktur)',
     'customer.approve.lawyer': 'Approve (Lawyer)',
     'customer.approve.auditor': 'Review (Auditor)',
+    'supplier.view': 'Lihat Supplier',
+    'supplier.bank.view': 'Lihat Bank Supplier',
+    'supplier.create': 'Tambah Supplier',
+    'supplier.update': 'Edit Supplier',
+    'supplier.delete': 'Hapus Supplier',
+    'supplier.pdf': 'Download PDF',
+    'supplier.import': 'Import CSV',
+    'supplier.link.create': 'Buat Link Publik',
+    'supplier.approve.manager': 'Approve (Manager)',
+    'supplier.approve.direktur': 'Approve (Direktur)',
+    'supplier.approve.lawyer': 'Approve (Lawyer)',
+    'supplier.approve.auditor': 'Review (Auditor)',
     'perusahaan.view': 'Lihat Perusahaan',
     'perusahaan.create': 'Tambah Perusahaan',
     'perusahaan.update': 'Edit Perusahaan',
@@ -59,12 +72,13 @@ function permissionLabel(perm: string): string {
 type GroupStyle = { card: string; badge: string; title: string; dot: string };
 const GROUP_STYLES: Record<string, GroupStyle> = {
     customer: { card: 'border-blue-200 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300', title: 'text-blue-800 dark:text-blue-300', dot: 'bg-blue-500' },
+    supplier: { card: 'border-teal-200 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/20', badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300', title: 'text-teal-800 dark:text-teal-300', dot: 'bg-teal-500' },
     perusahaan: { card: 'border-green-200 bg-green-50/60 dark:border-green-800 dark:bg-green-950/20', badge: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300', title: 'text-green-800 dark:text-green-300', dot: 'bg-green-500' },
     user: { card: 'border-purple-200 bg-purple-50/60 dark:border-purple-800 dark:bg-purple-950/20', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300', title: 'text-purple-800 dark:text-purple-300', dot: 'bg-purple-500' },
     role: { card: 'border-orange-200 bg-orange-50/60 dark:border-orange-800 dark:bg-orange-950/20', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300', title: 'text-orange-800 dark:text-orange-300', dot: 'bg-orange-500' },
 };
 const DEFAULT_STYLE: GroupStyle = { card: 'border-muted bg-muted/40', badge: 'bg-muted text-muted-foreground', title: 'text-foreground', dot: 'bg-muted-foreground' };
-const GROUP_LABELS: Record<string, string> = { customer: 'Customer', perusahaan: 'Perusahaan / Company', user: 'User', role: 'Role' };
+const GROUP_LABELS: Record<string, string> = { customer: 'Customer', supplier: 'Supplier', perusahaan: 'Perusahaan / Company', user: 'User', role: 'Role' };
 function getGroupStyle(g: string): GroupStyle { return GROUP_STYLES[g] ?? DEFAULT_STYLE; }
 
 interface PermissionGroupProps {

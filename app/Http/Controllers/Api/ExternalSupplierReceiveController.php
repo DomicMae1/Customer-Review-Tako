@@ -3,31 +3,25 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
-use App\Models\CustomerAttach;
+use App\Models\Supplier;
+use App\Models\SupplierAttach;
 use App\Models\Perusahaan;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 
-class ExternalCustomerReceiveController extends Controller
+class ExternalSupplierReceiveController extends Controller
 {
     /**
-     * Receive customer data from external application.
+     * Receive supplier data from external application.
      * 
-     * Endpoint: POST /api/customer/receive
+     * Endpoint: POST /api/supplier/receive
      * Auth: Sanctum (Bearer token)
-     * 
-     * Only receives and saves customer data.
-     * - UID is auto-generated, any sent uid is ignored/overwritten
-     * - Only customer fields are accepted and saved
-     * - Uses same connection and database as existing customer feature
      */
     public function store(Request $request)
     {
@@ -40,16 +34,15 @@ class ExternalCustomerReceiveController extends Controller
             ], 401);
         }
 
-        if (!$user->can('customer.create')) {
+        if (!$user->can('supplier.create')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized. Lacking customer.create permission.',
+                'message' => 'Unauthorized. Lacking supplier.create permission.',
             ], 403);
         }
 
-        // Temporary logging of headers and inputs before validation
-        Log::info('External customer API received headers:', $request->headers->all());
-        Log::info('External customer API received input:', $request->all());
+        Log::info('External supplier API received headers:', $request->headers->all());
+        Log::info('External supplier API received input:', $request->all());
 
         // Preprocess raw JSON content to strip invalid trailing commas
         $rawContent = $request->getContent();
@@ -60,9 +53,9 @@ class ExternalCustomerReceiveController extends Controller
                 $decoded = json_decode($cleanedContent, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                     $request->merge($decoded);
-                    Log::info('External customer API parsed and merged cleaned JSON input:', $request->all());
+                    Log::info('External supplier API parsed and merged cleaned JSON input:', $request->all());
                 } else {
-                    Log::warning('External customer API failed to decode cleaned JSON: ' . json_last_error_msg());
+                    Log::warning('External supplier API failed to decode cleaned JSON: ' . json_last_error_msg());
                 }
             }
         }
@@ -71,6 +64,17 @@ class ExternalCustomerReceiveController extends Controller
             'uid' => 'required|string',
             'uid_marketing' => 'required|string',
             'uid_perusahaan' => 'required|string',
+            'type' => 'nullable|string',
+            'kategori' => 'nullable|string',
+            'kategori_lain' => 'nullable|string',
+            'ownership' => 'nullable|string',
+            'created_by' => 'nullable|string',
+            'updated_by' => 'nullable|string',
+            'nama' => 'nullable|string',
+            'email_to' => 'nullable|string',
+            'email_cc' => 'nullable|string',
+
+            'supplier_category' => 'nullable|string',
             'jenis_perusahaan' => 'nullable|string',
             'kategori_usaha' => 'required|string',
             'nama_perusahaan' => 'required|string',
@@ -96,6 +100,12 @@ class ExternalCustomerReceiveController extends Controller
             'jabatan_personal' => 'nullable|string',
             'no_telp_personal' => 'nullable',
             'email_personal' => 'nullable|email',
+
+            // Bank Accounts array input
+            'bank_accounts' => 'nullable|array',
+            'bank_accounts.*.bank_name' => 'required_with:bank_accounts|string',
+            'bank_accounts.*.account_number' => 'required_with:bank_accounts|string',
+            'bank_accounts.*.account_holder' => 'required_with:bank_accounts|string',
 
             // Attachment inputs (PDF only, max 5MB)
             'pdf_npwp' => 'nullable|file|mimes:pdf|max:5120',
@@ -140,41 +150,44 @@ class ExternalCustomerReceiveController extends Controller
             ], 422);
         }
 
-        // Separate customer text data from uploaded files
-        $customerFields = [
-            'kategori_usaha', 'nama_perusahaan', 'bentuk_badan_usaha', 'alamat_lengkap',
+        $supplierFields = [
+            'supplier_category', 'kategori_usaha', 'nama_perusahaan', 'bentuk_badan_usaha', 'alamat_lengkap',
             'kota', 'no_telp', 'no_fax', 'alamat_penagihan', 'email', 'website', 'top',
             'status_perpajakan', 'no_npwp', 'no_npwp_16', 'nib', 'nama_pj', 'no_ktp_pj',
             'no_telp_pj', 'nama_personal', 'jabatan_personal', 'no_telp_personal', 'email_personal'
         ];
         if ($request->has('jenis_perusahaan')) {
-            $customerFields[] = 'jenis_perusahaan';
+            $supplierFields[] = 'jenis_perusahaan';
         }
-        $customerData = array_intersect_key($validated, array_flip($customerFields));
+        $supplierData = array_intersect_key($validated, array_flip($supplierFields));
 
-        if (isset($customerData['no_npwp_16']) && $customerData['no_npwp_16'] !== '') {
-            $digits16 = preg_replace('/\D/', '', (string) $customerData['no_npwp_16']);
+        if (empty($supplierData['supplier_category'])) {
+            $supplierData['supplier_category'] = $validated['kategori'] ?? 'Lokal';
+        }
+
+        if (isset($supplierData['no_npwp_16']) && $supplierData['no_npwp_16'] !== '') {
+            $digits16 = preg_replace('/\D/', '', (string) $supplierData['no_npwp_16']);
             if (strlen($digits16) === 16) {
-                $customerData['no_npwp_16'] = substr($digits16, 0, 4) . ' ' .
+                $supplierData['no_npwp_16'] = substr($digits16, 0, 4) . ' ' .
                                               substr($digits16, 4, 4) . ' ' .
                                               substr($digits16, 8, 4) . ' ' .
                                               substr($digits16, 12, 4);
             } else {
-                $customerData['no_npwp_16'] = $digits16;
+                $supplierData['no_npwp_16'] = $digits16;
             }
         }
 
-        if (isset($customerData['no_npwp']) && $customerData['no_npwp'] !== '') {
-            $digits15 = preg_replace('/\D/', '', (string) $customerData['no_npwp']);
+        if (isset($supplierData['no_npwp']) && $supplierData['no_npwp'] !== '') {
+            $digits15 = preg_replace('/\D/', '', (string) $supplierData['no_npwp']);
             if (strlen($digits15) === 15) {
-                $customerData['no_npwp'] = substr($digits15, 0, 2) . '.' .
+                $supplierData['no_npwp'] = substr($digits15, 0, 2) . '.' .
                                            substr($digits15, 2, 3) . '.' .
                                            substr($digits15, 5, 3) . '-' .
                                            substr($digits15, 8, 1) . '.' .
                                            substr($digits15, 9, 3) . '.' .
                                            substr($digits15, 12, 3);
             } else {
-                $customerData['no_npwp'] = $digits15;
+                $supplierData['no_npwp'] = $digits15;
             }
         }
 
@@ -185,48 +198,28 @@ class ExternalCustomerReceiveController extends Controller
             DB::connection('tako-customer')->beginTransaction();
             DB::connection('tako-perusahaan')->beginTransaction();
 
-            $customer = new Customer(array_merge($customerData, [
+            $supplier = new Supplier(array_merge($supplierData, [
                 'id_user' => $marketingUser->id,
                 'id_perusahaan' => $targetPerusahaan->id,
             ]));
-            $customer->uid = $validated['uid'];
-            $customer->save();
+            $supplier->uid = $validated['uid'];
+            $supplier->save();
 
-            // Mapping dari request keys ke type attachment & order string
             $attachmentsMap = [
-                'npwp' => [
-                    'key' => 'pdf_npwp',
-                    'order' => '001',
-                ],
-                'nib' => [
-                    'key' => 'pdf_nib',
-                    'order' => '002',
-                ],
-                'ktp' => [
-                    'key' => 'pdf_ktp',
-                    'order' => '003',
-                ],
-                'sppkp' => [
-                    'key' => 'pdf_sppkp',
-                    'order' => '004',
-                ],
+                'npwp' => ['key' => 'pdf_npwp', 'order' => '001'],
+                'nib'  => ['key' => 'pdf_nib',  'order' => '002'],
+                'ktp'  => ['key' => 'pdf_ktp',  'order' => '003'],
+                'sppkp'=> ['key' => 'pdf_sppkp', 'order' => '004'],
             ];
 
-            // Setup Storage disk & Company slug
-            $disk = Storage::disk('customers_external');
-            $companySlug = 'general';
-            if ($targetPerusahaan) {
-                $companySlug = Str::slug($targetPerusahaan->nama_perusahaan);
-            }
+            $disk = Storage::disk('suppliers_external');
+            $companySlug = $targetPerusahaan ? Str::slug($targetPerusahaan->nama_perusahaan) : 'general';
+            $targetDir = "{$companySlug}/supplier_attachment";
 
-            $targetDir = "{$companySlug}/attachment";
-
-            // Pastikan direktori target ada di disk customers_external
             if (!$disk->exists($targetDir)) {
                 $disk->makeDirectory($targetDir);
             }
 
-            // Pastikan local temporary directory untuk Ghostscript ada
             if (!Storage::disk('local')->exists('gs_processing')) {
                 Storage::disk('local')->makeDirectory('gs_processing');
             }
@@ -239,16 +232,15 @@ class ExternalCustomerReceiveController extends Controller
                 }
 
                 if ($file) {
-                    $npwpClean = preg_replace('/[^0-9]/', '', $customer->no_npwp) ?: '0000000000000000';
+                    $npwpClean = preg_replace('/[^0-9]/', '', $supplier->no_npwp) ?: '0000000000000000';
                     $newFileName = "{$npwpClean}-{$config['order']}-{$docType}.pdf";
                     $finalRelPath = "{$targetDir}/{$newFileName}";
 
-                    // Proses Kompresi Ghostscript
-                    $tempName = 'api_in_' . uniqid() . '.pdf';
+                    $tempName = 'api_sup_in_' . uniqid() . '.pdf';
                     $localInputPath = Storage::disk('local')->path("gs_processing/{$tempName}");
                     $file->storeAs('gs_processing', $tempName, 'local');
 
-                    $localOutputName = 'api_out_' . uniqid() . '.pdf';
+                    $localOutputName = 'api_sup_out_' . uniqid() . '.pdf';
                     $localOutputPath = Storage::disk('local')->path("gs_processing/{$localOutputName}");
 
                     $compressResult = $this->runGhostscript($localInputPath, $localOutputPath, 'medium');
@@ -262,31 +254,28 @@ class ExternalCustomerReceiveController extends Controller
                     @unlink($localInputPath);
 
                     if (!$successUpload) {
-                        // Fallback jika kompresi gagal: Simpan file asli
                         $disk->put($finalRelPath, file_get_contents($file->getRealPath()));
                     }
 
-                    // Tambahkan ke list rollback
                     $filesToDeleteOnRollback[] = $finalRelPath;
 
-                    // Simpan data attachment ke database
-                    $customerAttach = CustomerAttach::create([
-                        'customer_id' => $customer->id,
+                    $supplierAttach = SupplierAttach::create([
+                        'supplier_id' => $supplier->id,
                         'nama_file' => $newFileName,
                         'path' => $finalRelPath,
                         'type' => $docType,
                     ]);
 
                     $uploadedFilesInfo[] = [
-                        'type' => $customerAttach->type,
-                        'nama_file' => $customerAttach->nama_file,
-                        'path' => $customerAttach->path,
+                        'type' => $supplierAttach->type,
+                        'nama_file' => $supplierAttach->nama_file,
+                        'path' => $supplierAttach->path,
                     ];
                 }
             }
 
-            DB::connection('tako-perusahaan')->table('customers_statuses')->insert([
-                'id_Customer' => $customer->id,
+            DB::connection('tako-perusahaan')->table('suppliers_statuses')->insert([
+                'id_Supplier' => $supplier->id,
                 'id_user' => $user->id,
                 'submit_1_timestamps' => null,
                 'status_1_by' => null,
@@ -301,49 +290,50 @@ class ExternalCustomerReceiveController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Customer berhasil disimpan.',
+                'message' => 'Supplier berhasil disimpan.',
                 'data' => [
-                    'id' => $customer->id,
-                    'uid' => $customer->uid,
-                    'id_user' => $customer->id_user,
-                    'id_perusahaan' => $customer->id_perusahaan,
+                    'id' => $supplier->id,
+                    'uid' => $supplier->uid,
+                    'id_user' => $supplier->id_user,
+                    'id_perusahaan' => $supplier->id_perusahaan,
 
-                    'kategori_usaha' => $customer->kategori_usaha ? ucfirst(strtolower($customer->kategori_usaha)) : null,
-                    'nama_perusahaan' => $customer->nama_perusahaan,
-                    'bentuk_badan_usaha' => $customer->bentuk_badan_usaha,
-                    'jenis_perusahaan' => $customer->jenis_perusahaan,
-                    'alamat_lengkap' => $customer->alamat_lengkap,
-                    'kota' => $customer->kota,
-                    'no_telp' => $customer->no_telp,
-                    'no_fax' => $customer->no_fax,
-                    'alamat_penagihan' => $customer->alamat_penagihan,
-                    'email' => $customer->email,
-                    'website' => $customer->website,
-                    'top' => $customer->top,
-                    'status_perpajakan' => $customer->status_perpajakan,
-                    'no_npwp' => $customer->no_npwp,
-                    'no_npwp_16' => $customer->no_npwp_16,
-                    'nib' => $customer->nib,
+                    'supplier_category' => $supplier->supplier_category,
+                    'kategori_usaha' => $supplier->kategori_usaha ? ucfirst(strtolower($supplier->kategori_usaha)) : null,
+                    'nama_perusahaan' => $supplier->nama_perusahaan,
+                    'bentuk_badan_usaha' => $supplier->bentuk_badan_usaha,
+                    'jenis_perusahaan' => $supplier->jenis_perusahaan,
+                    'alamat_lengkap' => $supplier->alamat_lengkap,
+                    'kota' => $supplier->kota,
+                    'no_telp' => $supplier->no_telp,
+                    'no_fax' => $supplier->no_fax,
+                    'alamat_penagihan' => $supplier->alamat_penagihan,
+                    'email' => $supplier->email,
+                    'website' => $supplier->website,
+                    'top' => $supplier->top,
+                    'status_perpajakan' => $supplier->status_perpajakan,
+                    'no_npwp' => $supplier->no_npwp,
+                    'no_npwp_16' => $supplier->no_npwp_16,
+                    'nib' => $supplier->nib,
 
-                    'nama_pj' => $customer->nama_pj,
-                    'no_ktp_pj' => $customer->no_ktp_pj,
-                    'no_telp_pj' => $customer->no_telp_pj,
+                    'nama_pj' => $supplier->nama_pj,
+                    'no_ktp_pj' => $supplier->no_ktp_pj,
+                    'no_telp_pj' => $supplier->no_telp_pj,
 
-                    'nama_personal' => $customer->nama_personal,
-                    'jabatan_personal' => $customer->jabatan_personal,
-                    'no_telp_personal' => $customer->no_telp_personal,
-                    'email_personal' => $customer->email_personal,
+                    'nama_personal' => $supplier->nama_personal,
+                    'jabatan_personal' => $supplier->jabatan_personal,
+                    'no_telp_personal' => $supplier->no_telp_personal,
+                    'email_personal' => $supplier->email_personal,
 
+                    'bank_accounts' => $validated['bank_accounts'] ?? [],
                     'attachments' => $uploadedFilesInfo,
-                    'created_at' => $customer->created_at,
+                    'created_at' => $supplier->created_at,
                 ],
             ], 201);
         } catch (\Throwable $th) {
             DB::connection('tako-perusahaan')->rollBack();
             DB::connection('tako-customer')->rollBack();
 
-            // Hapus file yang sempat ter-upload pada storage disk
-            $disk = Storage::disk('customers_external');
+            $disk = Storage::disk('suppliers_external');
             foreach ($filesToDeleteOnRollback as $path) {
                 if ($disk->exists($path)) {
                     $disk->delete($path);
@@ -352,19 +342,10 @@ class ExternalCustomerReceiveController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Terjadi kesalahan saat menyimpan customer.',
+                'message' => 'Terjadi kesalahan saat menyimpan supplier.',
                 'error' => $th->getMessage(),
             ], 500);
         }
-    }
-
-    private function generateCustomerUid(): string
-    {
-        do {
-            $uid = now()->format('Ym') . random_int(100000, 999999);
-        } while (Customer::where('uid', $uid)->exists());
-
-        return $uid;
     }
 
     private function runGhostscript($inputPath, $outputPath, $mode)

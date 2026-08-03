@@ -17,7 +17,7 @@ const mainNavItems: MainNavItem[] = [
         title: 'Bank Customer',
         url: '/bank-customer',
         icon: Landmark,
-        permissions: ['customer.view'],
+        permissions: ['customer.bank.view'],
     },
     {
         title: 'Suppliers',
@@ -29,7 +29,7 @@ const mainNavItems: MainNavItem[] = [
         title: 'Bank Supplier',
         url: '/bank-supplier',
         icon: Landmark,
-        permissions: ['supplier.view'],
+        permissions: ['supplier.bank.view'],
     },
     {
         title: 'Manage Users',

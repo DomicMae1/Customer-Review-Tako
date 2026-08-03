@@ -126,7 +126,11 @@ export default function ViewCustomerForm({ customer }: { customer: MasterCustome
         !statusData?.status_2_timestamps &&
         !statusData?.status_3_timestamps;
 
-    const canEdit = !statusData?.submit_1_timestamps && (isCreator || (creatorRole && userRole && creatorRole === userRole));
+    const userPermissions = (props.auth.user as any)?.permissions || [];
+    const isAdmin = props.auth.user?.roles?.some((role: any) => role.name === 'admin');
+    const hasEditPermission = isAdmin || userPermissions.includes('customer.update');
+
+    const canEdit = hasEditPermission && !statusData?.submit_1_timestamps && (isCreator || (creatorRole && userRole && creatorRole === userRole));
 
     const openSubmitConfirmation = (decision: 'approved' | 'rejected' | null = null) => {
         setPendingDecision(decision);

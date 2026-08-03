@@ -32,8 +32,8 @@ class BankSupplierController extends Controller
     {
         $user = auth('web')->user();
 
-        if (!$user->can('supplier.view')) {
-            throw UnauthorizedException::forPermissions(['supplier.view']);
+        if (!$user->can('supplier.bank.view')) {
+            throw UnauthorizedException::forPermissions(['supplier.bank.view']);
         }
 
         $query = Supplier::with(['perusahaan'])->whereNotNull('id_perusahaan');

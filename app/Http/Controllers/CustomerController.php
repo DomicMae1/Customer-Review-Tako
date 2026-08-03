@@ -685,9 +685,11 @@ class CustomerController extends Controller
 
         $roles = $user->getRoleNames();
 
-        if ($roles->contains('marketing')) {
+        if ($roles->contains('admin')) {
+            $idPerusahaan = $request->id_perusahaan ?: (session('admin_active_company_id') ?: $user->id_perusahaan);
+        } elseif ($roles->contains('marketing')) {
             $idPerusahaan = $user->id_perusahaan;
-        } elseif ($roles->contains('manager') || $roles->contains('direktur') || $roles->contains('admin')) {
+        } elseif ($roles->contains('manager') || $roles->contains('direktur')) {
             $idPerusahaan = $request->id_perusahaan;
         } else {
             $idPerusahaan = $user->id_perusahaan;
@@ -755,32 +757,35 @@ class CustomerController extends Controller
         $isCustomerPerorangan = $request->bentuk_badan_usaha === 'Customer Perorangan';
         $isLuarNegeri = $request->jenis_perusahaan === 'Perusahaan Luar Negeri';
 
-        if (!$isLuarNegeri && $perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
-            return redirect()
-                ->back()
-                ->withErrors(['attachments' => 'Dokumen NPWP wajib diunggah.']);
-        }
+        if ($perusahaan) {
+            if (!$isLuarNegeri && $perusahaan->is_npwp && !in_array('npwp', $attachmentTypes, true)) {
+                return redirect()
+                    ->back()
+                    ->withErrors(['attachments' => 'Dokumen NPWP wajib diunggah.']);
+            }
 
-        if (!$isLuarNegeri && $perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
-            return redirect()
-                ->back()
-                ->withErrors(['attachments' => 'Dokumen NIB wajib diunggah.']);
-        }
+            if (!$isLuarNegeri && $perusahaan->is_nib && !$isCustomerPerorangan && !in_array('nib', $attachmentTypes, true)) {
+                return redirect()
+                    ->back()
+                    ->withErrors(['attachments' => 'Dokumen NIB wajib diunggah.']);
+            }
 
-        if ($perusahaan->is_sptkp && !in_array('sppkp', $attachmentTypes, true)) {
-            return redirect()
-                ->back()
-                ->withErrors(['attachments' => 'Dokumen SPTKP wajib diunggah.']);
-        }
+            if ($perusahaan->is_sptkp && !in_array('sppkp', $attachmentTypes, true)) {
+                return redirect()
+                    ->back()
+                    ->withErrors(['attachments' => 'Dokumen SPTKP wajib diunggah.']);
+            }
 
-        if ($perusahaan->is_ktp && !in_array('ktp', $attachmentTypes, true)) {
-            return redirect()
-                ->back()
-                ->withErrors(['attachments' => 'Dokumen KTP wajib diunggah.']);
+            if ($perusahaan->is_ktp && !in_array('ktp', $attachmentTypes, true)) {
+                return redirect()
+                    ->back()
+                    ->withErrors(['attachments' => 'Dokumen KTP wajib diunggah.']);
+            }
         }
 
         try {
-            DB::beginTransaction();
+            DB::connection('tako-customer')->beginTransaction();
+            DB::connection('tako-perusahaan')->beginTransaction();
 
             $customer = Customer::create(array_merge($validated, [
                 'id_user' => $user->id,
@@ -811,13 +816,15 @@ class CustomerController extends Controller
                 'updated_at' => now(),
             ]);
 
-            DB::commit();
+            DB::connection('tako-customer')->commit();
+            DB::connection('tako-perusahaan')->commit();
 
             $this->sendCustomerToExternalApi($customer, $user);
 
             return Inertia::location(route('customer.show', $customer->id));
         } catch (\Throwable $th) {
-            DB::rollBack();
+            DB::connection('tako-customer')->rollBack();
+            DB::connection('tako-perusahaan')->rollBack();
 
             return redirect()
                 ->back()
@@ -1981,17 +1988,46 @@ class CustomerController extends Controller
             return;
         }
 
+        $bentukBadanUsahaMap = [
+            'Penanaman Modal Asing' => 'PMA',
+            'Penanaman Modal Dalam Negeri' => 'PMDN',
+            'Perseroan Terbatas' => 'PT',
+            'Commanditaire Vennootschap' => 'CV',
+            'Usaha Dagang' => 'UD',
+            'Perusahaan Perseorangan' => 'PO',
+            'Customer Perorangan' => 'CP',
+            'Supplier Perorangan' => 'SP',
+        ];
+
         $payload = [
             'uid_perusahaan' => $perusahaan->uid,
             'uid_marketing' => $user->hasRole('marketing') ? ($user->uid ?? null) : null,
             'uid' => $customer->uid,
             'nama_perusahaan' => $customer->nama_perusahaan,
-            'type' => 'external',
+            'jenis_perusahaan' => $customer->jenis_perusahaan ?? 'Perusahaan Dalam Negeri',
+            'kategori_usaha' => $customer->kategori_usaha ? ucfirst(strtolower($customer->kategori_usaha)) : null,
+            'bentuk_badan_usaha' => $bentukBadanUsahaMap[$customer->bentuk_badan_usaha] ?? $customer->bentuk_badan_usaha,
+            'alamat_lengkap' => $customer->alamat_lengkap,
+            'kota' => $customer->kota,
+            'no_telp' => $customer->no_telp_list,
+            'no_fax' => $customer->no_fax,
+            'alamat_penagihan' => $customer->alamat_penagihan,
             'email' => $customer->email ?: null,
-            'nama' => $customer->nama_personal ?: null,
+            'website' => $customer->website,
+            'top' => $customer->top,
+            'status_perpajakan' => $customer->status_perpajakan,
             'no_npwp' => preg_replace('/\D/', '', $customer->no_npwp ?? ''),
             'no_npwp_16' => preg_replace('/\D/', '', $customer->no_npwp_16 ?? ''),
+            'nib' => $customer->nib ?? null,
             'no_nib' => $customer->nib ?? null,
+            'nama_pj' => $customer->nama_pj,
+            'no_ktp_pj' => $customer->no_ktp_pj,
+            'no_telp_pj' => $customer->no_telp_pj,
+            'nama' => $customer->nama_personal ?: null,
+            'nama_personal' => $customer->nama_personal ?: null,
+            'jabatan_personal' => $customer->jabatan_personal,
+            'no_telp_personal' => $customer->no_telp_personal_list,
+            'email_personal' => $customer->email_personal,
         ];
 
         try {

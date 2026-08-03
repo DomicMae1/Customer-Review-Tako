@@ -55,7 +55,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const userHasCompanies = Array.isArray(auth.user?.companies) && auth.user.companies.length > 0;
 
     const canImport = hasPermission('supplier.import');
-    const canAddSupplier = hasPermission('supplier.create') && (userHasMainCompany || userHasCompanies);
+    const canAddSupplier = hasPermission('supplier.create') && (isAdmin || userHasMainCompany || userHasCompanies);
 
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'keterangan_status', desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -187,6 +187,9 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         }
     };
 
+    const showCompanySelect = isAdmin || (companies.length >= 2);
+    const defaultCompanyId = auth.user?.id_perusahaan ? String(auth.user.id_perusahaan) : (companies[0]?.id ? String(companies[0].id) : '');
+
     const handleImportCsv = () => {
         setIsImportDialogOpen(true);
     };
@@ -194,7 +197,9 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const handleSubmitImportCsv = (event: React.FormEvent) => {
         event.preventDefault();
 
-        if (!selectedImportPerusahaanId) {
+        const targetCompanyId = showCompanySelect ? selectedImportPerusahaanId : defaultCompanyId;
+
+        if (showCompanySelect && !selectedImportPerusahaanId) {
             toast.error('Pilih perusahaan tujuan terlebih dahulu.');
             return;
         }
@@ -205,7 +210,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         }
 
         const formData = new FormData();
-        formData.append('id_perusahaan', selectedImportPerusahaanId);
+        formData.append('id_perusahaan', targetCompanyId);
         formData.append('csv_file', csvFile);
 
         router.post(route('supplier.import-csv'), formData, {
@@ -730,21 +735,23 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     </DialogHeader>
 
                     <form onSubmit={handleSubmitImportCsv} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="import_supplier_company">Perusahaan Tujuan</Label>
-                            <Select value={selectedImportPerusahaanId} onValueChange={setSelectedImportPerusahaanId}>
-                                <SelectTrigger id="import_supplier_company" className="w-full">
-                                    <SelectValue placeholder="Pilih perusahaan" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {companies.map((company: any) => (
-                                        <SelectItem key={company.id} value={String(company.id)}>
-                                            {company.nama_perusahaan}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {showCompanySelect && (
+                            <div className="space-y-2">
+                                <Label htmlFor="import_supplier_company">Perusahaan Tujuan</Label>
+                                <Select value={selectedImportPerusahaanId} onValueChange={setSelectedImportPerusahaanId}>
+                                    <SelectTrigger id="import_supplier_company" className="w-full">
+                                        <SelectValue placeholder="Pilih perusahaan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {companies.map((company: any) => (
+                                            <SelectItem key={company.id} value={String(company.id)}>
+                                                {company.nama_perusahaan}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="supplier_csv_file">CSV File</Label>
