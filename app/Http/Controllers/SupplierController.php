@@ -577,9 +577,11 @@ class SupplierController extends Controller
 
         $roles = $user->getRoleNames();
 
-        if ($roles->contains('marketing')) {
+        if ($roles->contains('admin')) {
+            $idPerusahaan = $request->id_perusahaan ?: (session('admin_active_company_id') ?: $user->id_perusahaan);
+        } elseif ($roles->contains('marketing')) {
             $idPerusahaan = $user->id_perusahaan;
-        } elseif ($roles->contains('manager') || $roles->contains('direktur') || $roles->contains('admin')) {
+        } elseif ($roles->contains('manager') || $roles->contains('direktur')) {
             $idPerusahaan = $request->id_perusahaan;
         } else {
             $idPerusahaan = $user->id_perusahaan;
@@ -673,7 +675,8 @@ class SupplierController extends Controller
         }
 
         try {
-            DB::beginTransaction();
+            DB::connection('tako-customer')->beginTransaction();
+            DB::connection('tako-perusahaan')->beginTransaction();
 
             $supplier = Supplier::create(array_merge($validated, [
                 'id_user' => $user->id,
@@ -704,17 +707,25 @@ class SupplierController extends Controller
                 'updated_at' => now(),
             ]);
 
-            DB::commit();
+            DB::connection('tako-customer')->commit();
+            DB::connection('tako-perusahaan')->commit();
 
             $this->sendSupplierToExternalApi($supplier, $user);
 
             return Inertia::location(route('supplier.show', $supplier->id));
         } catch (\Throwable $th) {
-            DB::rollBack();
+            Log::error('Gagal menyimpan supplier.', [
+                'user_id' => $user->id,
+                'id_perusahaan' => $idPerusahaan,
+                'error' => $th->getMessage(),
+            ]);
+
+            DB::connection('tako-customer')->rollBack();
+            DB::connection('tako-perusahaan')->rollBack();
 
             return redirect()
                 ->back()
-                ->withErrors(['error' => 'Terjadi kesalahan: ' . $th->getMessage()]);
+                ->withErrors(['error' => 'Data supplier gagal disimpan. Silakan coba lagi atau hubungi administrator.']);
         }
     }
 
@@ -1877,17 +1888,53 @@ class SupplierController extends Controller
             return;
         }
 
+        $bentukBadanUsahaMap = [
+            'Penanaman Modal Asing' => 'PMA',
+            'Penanaman Modal Dalam Negeri' => 'PMDN',
+            'Perseroan Terbatas' => 'PT',
+            'Commanditaire Vennootschap' => 'CV',
+            'Usaha Dagang' => 'UD',
+            'Perusahaan Perseorangan' => 'PO',
+            'Customer Perorangan' => 'CP',
+            'Supplier Perorangan' => 'SP',
+        ];
+
         $payload = [
-            'uid_perusahaan' => $perusahaan->uid,
-            'uid_marketing' => $user->hasRole('marketing') ? ($user->uid ?? null) : null,
             'uid' => $supplier->uid,
+            'uid_perusahaan' => $perusahaan->uid,
+            'uid_marketing' => $user->hasRole('marketing') ? ($user->uid ?? null) : ($uidMarketingOverride ?? null),
             'nama_perusahaan' => $supplier->nama_perusahaan,
-            'type' => 'external',
-            'email' => $supplier->email,
-            'nama' => $supplier->nama_personal,
+            'type' => $supplier->jenis_perusahaan ?? 'external',
+            'kategori' => $supplier->supplier_category ?? $supplier->kategori_usaha ?? 'Lokal',
+            'kategori_lain' => null,
+            'ownership' => null,
+            'created_by' => $supplier->creator?->name ?? $user->name,
+            'updated_by' => null,
             'no_npwp' => preg_replace('/\D/', '', $supplier->no_npwp ?? ''),
             'no_npwp_16' => preg_replace('/\D/', '', $supplier->no_npwp_16 ?? ''),
-            'no_nib' => $supplier->nib ?? null,
+            'nib' => $supplier->nib ?? null,
+            'email' => $supplier->email ?: null,
+            'nama' => $supplier->nama_personal ?? $supplier->nama_pj ?? null,
+            'email_to' => null,
+            'email_cc' => null,
+            'alamat_lengkap' => $supplier->alamat_lengkap,
+            'kategori_usaha' => $supplier->kategori_usaha ? ucfirst(strtolower($supplier->kategori_usaha)) : null,
+            'bentuk_badan_usaha' => $bentukBadanUsahaMap[$supplier->bentuk_badan_usaha] ?? $supplier->bentuk_badan_usaha,
+            'kota' => $supplier->kota,
+            'no_telp' => $supplier->formatted_no_telp ?: null,
+            'no_fax' => $supplier->no_fax,
+            'alamat_penagihan' => $supplier->alamat_penagihan,
+            'website' => $supplier->website,
+            'top' => $supplier->top,
+            'status_perpajakan' => $supplier->status_perpajakan,
+            'nama_pj' => $supplier->nama_pj,
+            'no_ktp_pj' => $supplier->no_ktp_pj,
+            'no_telp_pj' => $supplier->no_telp_pj,
+            'nama_personal' => $supplier->nama_personal,
+            'jabatan_personal' => $supplier->jabatan_personal,
+            'no_telp_personal' => $supplier->formatted_no_telp_personal ?: null,
+            'email_personal' => $supplier->email_personal,
+            'bank_accounts' => [],
         ];
 
         try {
@@ -2294,3 +2341,6 @@ class SupplierController extends Controller
         return $digits;
     }
 }
+
+
+
