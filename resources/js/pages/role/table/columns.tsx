@@ -10,6 +10,7 @@ import { MoreHorizontal, ShieldCheck } from 'lucide-react';
 // ─── Label & warna (sama dengan page.tsx) ───────────────────────────────────
 const PERMISSION_LABELS: Record<string, string> = {
     'customer.view': 'Lihat Customer',
+    'customer.bank.view': 'Lihat Bank Customer',
     'customer.create': 'Tambah Customer',
     'customer.update': 'Edit Customer',
     'customer.delete': 'Hapus Customer',
@@ -20,6 +21,18 @@ const PERMISSION_LABELS: Record<string, string> = {
     'customer.approve.direktur': 'Approve (Direktur)',
     'customer.approve.lawyer': 'Approve (Lawyer)',
     'customer.approve.auditor': 'Review (Auditor)',
+    'supplier.view': 'Lihat Supplier',
+    'supplier.bank.view': 'Lihat Bank Supplier',
+    'supplier.create': 'Tambah Supplier',
+    'supplier.update': 'Edit Supplier',
+    'supplier.delete': 'Hapus Supplier',
+    'supplier.pdf': 'Download PDF',
+    'supplier.import': 'Import CSV',
+    'supplier.link.create': 'Buat Link Publik',
+    'supplier.approve.manager': 'Approve (Manager)',
+    'supplier.approve.direktur': 'Approve (Direktur)',
+    'supplier.approve.lawyer': 'Approve (Lawyer)',
+    'supplier.approve.auditor': 'Review (Auditor)',
     'perusahaan.view': 'Lihat Perusahaan',
     'perusahaan.create': 'Tambah Perusahaan',
     'perusahaan.update': 'Edit Perusahaan',
@@ -39,6 +52,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 type GroupInfo = { label: string; badge: string; dot: string };
 const GROUP_INFO: Record<string, GroupInfo> = {
     customer:   { label: 'Customer',   badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',     dot: 'bg-blue-500' },
+    supplier:   { label: 'Supplier',   badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300',     dot: 'bg-teal-500' },
     perusahaan: { label: 'Perusahaan', badge: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300', dot: 'bg-green-500' },
     user:       { label: 'User',       badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300', dot: 'bg-purple-500' },
     role:       { label: 'Role',       badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300', dot: 'bg-orange-500' },

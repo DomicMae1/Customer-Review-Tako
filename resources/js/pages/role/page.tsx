@@ -24,6 +24,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const PERMISSION_LABELS: Record<string, string> = {
     // Customer
     'customer.view': 'Lihat Customer',
+    'customer.bank.view': 'Lihat Bank Customer',
     'customer.create': 'Tambah Customer',
     'customer.update': 'Edit Customer',
     'customer.delete': 'Hapus Customer',
@@ -34,6 +35,19 @@ const PERMISSION_LABELS: Record<string, string> = {
     'customer.approve.direktur': 'Approve (Direktur)',
     'customer.approve.lawyer': 'Approve (Lawyer)',
     'customer.approve.auditor': 'Review (Auditor)',
+    // Supplier
+    'supplier.view': 'Lihat Supplier',
+    'supplier.bank.view': 'Lihat Bank Supplier',
+    'supplier.create': 'Tambah Supplier',
+    'supplier.update': 'Edit Supplier',
+    'supplier.delete': 'Hapus Supplier',
+    'supplier.pdf': 'Download PDF',
+    'supplier.import': 'Import CSV',
+    'supplier.link.create': 'Buat Link Publik',
+    'supplier.approve.manager': 'Approve (Manager)',
+    'supplier.approve.direktur': 'Approve (Direktur)',
+    'supplier.approve.lawyer': 'Approve (Lawyer)',
+    'supplier.approve.auditor': 'Review (Auditor)',
     // Perusahaan
     'perusahaan.view': 'Lihat Perusahaan',
     'perusahaan.create': 'Tambah Perusahaan',
@@ -72,6 +86,12 @@ const GROUP_STYLES: Record<string, GroupStyle> = {
         title: 'text-blue-800 dark:text-blue-300',
         dot: 'bg-blue-500',
     },
+    supplier: {
+        card: 'border-teal-200 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/20',
+        badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300',
+        title: 'text-teal-800 dark:text-teal-300',
+        dot: 'bg-teal-500',
+    },
     perusahaan: {
         card: 'border-green-200 bg-green-50/60 dark:border-green-800 dark:bg-green-950/20',
         badge: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
@@ -101,6 +121,7 @@ const DEFAULT_STYLE: GroupStyle = {
 
 const GROUP_LABELS: Record<string, string> = {
     customer: 'Customer',
+    supplier: 'Supplier',
     perusahaan: 'Perusahaan / Company',
     user: 'User',
     role: 'Role',

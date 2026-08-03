@@ -55,7 +55,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const userHasCompanies = Array.isArray(auth.user?.companies) && auth.user.companies.length > 0;
 
     const canImport = hasPermission('customer.import');
-    const canAddCustomer = hasPermission('customer.create') && (userHasMainCompany || userHasCompanies);
+    const canAddCustomer = hasPermission('customer.create') && (isAdmin || userHasMainCompany || userHasCompanies);
 
     const [sorting, setSorting] = React.useState<SortingState>([{ id: 'keterangan_status', desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -187,6 +187,9 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         }
     };
 
+    const showCompanySelect = isAdmin || (companies.length >= 2);
+    const defaultCompanyId = auth.user?.id_perusahaan ? String(auth.user.id_perusahaan) : (companies[0]?.id ? String(companies[0].id) : '');
+
     const handleImportCsv = () => {
         setIsImportDialogOpen(true);
     };
@@ -194,10 +197,9 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     const handleSubmitImportCsv = (event: React.FormEvent) => {
         event.preventDefault();
 
-        const isMarketing = userRole === 'marketing';
-        const targetCompanyId = isMarketing ? String(auth.user?.id_perusahaan || '') : selectedImportPerusahaanId;
+        const targetCompanyId = showCompanySelect ? selectedImportPerusahaanId : defaultCompanyId;
 
-        if (!isMarketing && !selectedImportPerusahaanId) {
+        if (showCompanySelect && !selectedImportPerusahaanId) {
             toast.error('Pilih perusahaan tujuan terlebih dahulu.');
             return;
         }
@@ -733,7 +735,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
                     </DialogHeader>
 
                     <form onSubmit={handleSubmitImportCsv} className="space-y-4">
-                        {userRole !== 'marketing' && (
+                        {showCompanySelect && (
                             <div className="space-y-2">
                                 <Label htmlFor="import_customer_company">Perusahaan Tujuan</Label>
                                 <Select value={selectedImportPerusahaanId} onValueChange={setSelectedImportPerusahaanId}>
