@@ -1,6 +1,6 @@
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { type MainNavItem, PageProps } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { Building2, Landmark, Shield, SquareUserRound, Users, Truck } from 'lucide-react';
@@ -65,6 +65,7 @@ const mainNavItems: MainNavItem[] = [
 // ];
 
 export function AppSidebar() {
+    const { setOpen } = useSidebar();
     const { auth } = usePage<PageProps>().props;
 
     const isAdmin = auth?.user?.roles?.some((role: { name: string }) => role.name === 'admin');
@@ -94,13 +95,26 @@ export function AppSidebar() {
         .filter((item): item is MainNavItem => item !== null);
 
     return (
-        <Sidebar collapsible="icon" variant="inset">
+        <Sidebar
+            collapsible="icon"
+            variant="inset"
+            onMouseEnter={() => setOpen(true)}
+            onMouseLeave={() => setOpen(false)}
+        >
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
+                        <SidebarMenuButton
+                            size="lg"
+                            asChild
+                        >
                             <Link href="/customer" prefetch>
-                                <AppLogo />
+                                <span
+                                    className="flex min-w-0 flex-1 items-center"
+                                    onClick={() => setOpen(true)}
+                                >
+                                    <AppLogo />
+                                </span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
